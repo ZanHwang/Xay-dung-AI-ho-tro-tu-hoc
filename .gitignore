@@ -1,0 +1,27 @@
+# tu-hoc-rag-v2/ is its own separate git repo (reference-only design/logic,
+# never run/deployed) - not part of this project.
+/tu-hoc-rag-v2/
+
+# Local run log, not meant to be shared.
+/backend.log
+
+# Superseded by the root README.md's own "Chạy nhanh" section - kept locally
+# only so the two don't drift out of sync.
+/howtorun.md
+
+# Claude Code's own local session/tool state - never meant to be shared.
+/.claude/
+
+# Detached copy of frontend/'s old .git (see the "tách .git cũ ra" step) -
+# raw git internals, never meant to be committed into the new repo.
+/frontend-git-backup/
+
+# Owner's own working notes for this Claude Code session (rules Claude
+# follows, architecture/decision log) - not meant for the shared repo.
+/CLAUDE.md
+/PROJECT-OVERVIEW.md
+/PLAN-MERGE.md
+
+# OS cruft
+.DS_Store
+Thumbs.db

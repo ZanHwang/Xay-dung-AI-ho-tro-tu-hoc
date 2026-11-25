@@ -1,0 +1,25 @@
+# env files (real secrets live here - never commit) - keep the template
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Tests
+.pytest_cache/
+*.db
+!**/fixtures/*.db
+
+# Locally stored uploads (user documents, generated figures) - created on
+# demand by DocumentService via os.makedirs(), never needs to pre-exist here.
+/documents/
+
+# Editors / OS
+.DS_Store
+*.swp
