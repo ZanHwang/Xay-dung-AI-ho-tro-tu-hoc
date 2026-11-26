@@ -251,8 +251,9 @@ Trả lời theo format JSON như sau:
         reach the shared bank.
         """
         scope = topic or subject
+        reference = f"Nội dung tham khảo:\n{context}\n" if context else ""
         prompt = f"""Bạn là giám khảo câu hỏi. Kiểm tra câu hỏi sau thuộc đúng phạm vi "{scope}" (môn: {subject}) và đáp án được đánh dấu là ĐÚNG.
-{f"Nội dung tham khảo:\n{context}\n" if context else ""}
+{reference}
 Câu hỏi: {question.get('question_text')}
 Đáp án: {question.get('options')}
 Đáp án đúng (index): {question.get('correct_answer')}

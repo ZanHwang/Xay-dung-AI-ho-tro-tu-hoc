@@ -9,13 +9,13 @@ const questionSchema = z.object({
   backendTopic: z.string().nullable().optional(),
 }).refine((question) => question.correctIndex < question.options.length);
 const quizSchema = z.object({
-  id: z.string().min(1), subjectId: z.string().min(1), title: z.string().min(1), createdAt: z.string().datetime(),
+  id: z.string().min(1), subjectId: z.string(), title: z.string().min(1), createdAt: z.string().datetime(),
   adaptive: z.boolean().optional(), difficulty: z.enum(["easy", "medium", "hard"]).optional(),
   backendId: z.string().optional(),
   documentId: z.string().nullable().optional(),
   source: z.enum(["sample", "api", "shared", "weakness", "wrong", "review"]), conversationId: z.string().nullable(),
   questions: z.array(questionSchema).min(1).max(50).refine((questions) => new Set(questions.map((q) => q.id)).size === questions.length),
-});
+}).refine((quiz) => quiz.subjectId.length > 0 || quiz.source === "review" || quiz.source === "wrong");
 const draftSchema = z.object({ id: z.string().min(1), quizId: z.string().min(1), startedAt: z.string().datetime(), answers: z.record(z.number().int().nonnegative()) });
 const attemptSchema = draftSchema.extend({ submittedAt: z.string().datetime(), backendResultId: z.string().optional() });
 const savedSchema = z.object({
@@ -148,7 +148,8 @@ export function createQuizStore(storage: () => StorageAccess, userId?: string) {
 
       const allQuizzes = [...state.quizzes, ...newQuizzes];
       const byBackendId = new Map(allQuizzes.filter((quiz) => quiz.backendId).map((quiz) => [quiz.backendId as string, quiz]));
-      const existingAttemptIds = new Set(state.attempts.map((attempt) => attempt.id));
+      const existingAttemptIds = new Set(state.attempts.flatMap((attempt) =>
+        attempt.backendResultId ? [attempt.id, attempt.backendResultId] : [attempt.id]));
       const newAttempts: QuizAttempt[] = [];
       for (const result of apiResults) {
         if (existingAttemptIds.has(result.id)) continue;

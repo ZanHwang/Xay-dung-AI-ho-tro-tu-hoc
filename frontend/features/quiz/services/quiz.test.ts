@@ -4,7 +4,7 @@ import { initialSubjects } from "@/features/subjects/data/subject.mocks";
 import { questionsForSubject } from "../data/question-bank";
 import { calculateMastery, gradeQuiz, selectQuestions } from "./quiz-engine";
 import { createQuizStore, QUIZ_STORAGE_KEY } from "./quiz-store";
-import type { Quiz, QuizAttempt } from "../types";
+import type { Quiz, QuizAttempt, QuizResultResponse } from "../types";
 
 const questions = questionsForSubject(initialSubjects[0]);
 const input = { subjectId: initialSubjects[0].id, title: "Quiz test", adaptive: false, source: "sample" as const, conversationId: "chat-1", questions: questions.slice(0, 3) };
@@ -129,4 +129,32 @@ test("storage failures retain the current session and expose an error", () => {
   store.submit(store.start(id)!);
   assert.equal(store.getSnapshot().attempts.length, 1);
   assert.ok(store.getSnapshot().error);
+});
+
+test("cross-subject review quizzes and attempts survive reloading", () => {
+  const { store, storage } = setup();
+  const id = store.create({ ...input, subjectId: "", source: "review" });
+  store.submit(store.start(id)!);
+  const restored = createQuizStore(() => storage);
+  restored.hydrate();
+  assert.equal(restored.getSnapshot().error, null);
+  assert.equal(restored.getSnapshot().quizzes[0].subjectId, "");
+  assert.equal(restored.getSnapshot().attempts.length, 1);
+  assert.throws(() => store.create({ ...input, subjectId: "" }));
+});
+
+test("server sync does not duplicate a submitted attempt or reopen its draft", () => {
+  const { store } = setup();
+  const id = store.create({ ...input, backendId: "server-quiz", source: "api" });
+  const draftId = store.start(id)!;
+  store.answer(draftId, questions[0].id, 0);
+  store.submit(draftId, "server-result");
+  const response: QuizResultResponse = {
+    id: "server-result", quiz_id: "server-quiz", score: 33, total_questions: 3,
+    correct_count: 1, created_at: "2026-01-01T00:00:00", answers: [],
+  };
+  store.mergeFromServer([], [response]);
+  assert.equal(store.getSnapshot().attempts.length, 1);
+  assert.equal(store.getSnapshot().attempts[0].id, draftId);
+  assert.equal(store.getSnapshot().drafts.length, 0);
 });

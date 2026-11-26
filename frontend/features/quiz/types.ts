@@ -58,7 +58,7 @@ export type TopicMastery = { subjectId: string; topic: string; correct: number; 
 export interface ApiQuiz {
   id: string;
   user_id: string;
-  subject_id: string;
+  subject_id: string | null;
   document_id?: string;
   title: string;
   difficulty: QuizDifficulty;

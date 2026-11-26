@@ -44,6 +44,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   // Topic to open in the read-only "Xem lại kiến thức" dialog (see
   // TopicLearnDialog mode="review") - set from a wrong answer's own topic.
@@ -90,19 +91,21 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   }, [quiz.id, initialAttemptId]);
 
   async function submit() {
-    if (!draft || submitting) return;
+    if (!draft || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
+    setError("");
     try {
       const isBackend = ["api", "shared", "wrong", "review"].includes(quiz.source ?? "");
       let backendResultId;
       if (isBackend) {
-        // Persist the result on the backend (spaced-repetition review
-        // scheduling). Best-effort: the local grade (UI) still works even
-        // if the backend call fails.
+        // Keep the local grade usable if saving fails, but show the failure.
         try {
           const res = await quizApi.submit(quiz.backendId ?? quiz.id, draft.answers);
           backendResultId = res.id;
-        } catch { /* backend submit is best-effort */ }
+        } catch {
+          setError("Kết quả chỉ được lưu trên trình duyệt; chưa lưu được lên máy chủ.");
+        }
       }
       const id = quizzes.store.submit(draft.id, backendResultId);
       setAttemptId(id);
@@ -111,6 +114,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
       setConfirmSubmit(false);
       setWrongOnly(false);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -153,7 +157,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
         <h3>{quiz.title}</h3>
         <div style={{ display: "flex", gap: 12 }}>
           {!taking ? <Button onClick={start}>{draft ? "Tiếp tục bài đang làm" : attempt ? "Làm lại" : "Bắt đầu làm bài"}</Button> : null}
-          {taking ? <Button variant="ghost" onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button> : null}
+          {taking ? <Button variant="ghost" disabled={submitting} onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button> : null}
         </div>
       </div>
 
@@ -197,6 +201,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
                       <label key={optionIndex} className="option" style={{ cursor: "pointer", borderColor: chosen ? "var(--ink)" : "var(--border)" }}>
                         <input
                           type="radio"
+                          disabled={submitting}
                           name={`${draft.id}-${question.id}`}
                           checked={chosen}
                           onChange={() => quizzes.store.answer(draft.id, question.id, optionIndex)}

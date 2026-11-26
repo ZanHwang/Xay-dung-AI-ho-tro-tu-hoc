@@ -1,0 +1,18 @@
+[
+  {
+    "check": "retake round 1 stays on result",
+    "pass": true
+  },
+  {
+    "check": "retake round 2 stays on result",
+    "pass": true
+  },
+  {
+    "check": "no leftover draft and no AI requests",
+    "pass": true
+  },
+  {
+    "check": "reload keeps history without duplicate attempts",
+    "pass": true
+  }
+]

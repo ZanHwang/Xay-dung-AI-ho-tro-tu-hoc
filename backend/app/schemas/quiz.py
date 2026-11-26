@@ -48,7 +48,7 @@ class QuizQuestionResponse(QuizQuestionBase):
 class QuizResponse(QuizBase):
     id: UUID
     user_id: UUID
-    subject_id: UUID
+    subject_id: Optional[UUID] = None
     document_id: Optional[UUID] = None
     source: Optional[str] = None  # llm | document | wrong
     created_at: datetime

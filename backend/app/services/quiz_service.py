@@ -239,13 +239,17 @@ class QuizService:
             .all()
         )
 
-        if len(data.answers) != len(questions):
-            # Allow partial submission - some questions might be skipped
-            if len(data.answers) > len(questions):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Number of answers exceeds number of questions"
-                )
+        by_id = {question.id: question for question in questions}
+        answered_questions = {answer.question_id: answer for answer in data.answers}
+        if len(answered_questions) != len(data.answers):
+            raise HTTPException(status_code=400, detail="Duplicate question answers")
+        for answer in data.answers:
+            question = by_id.get(answer.question_id)
+            if question is None:
+                raise HTTPException(status_code=400, detail="Question does not belong to this quiz")
+            options = json.loads(question.options) if isinstance(question.options, str) else question.options
+            if not 0 <= answer.selected_answer < len(options):
+                raise HTTPException(status_code=400, detail="Invalid answer option")
 
         # Create quiz result
         correct_count = 0
@@ -257,11 +261,8 @@ class QuizService:
             score=0
         )
         self.db.add(result)
-        self.db.commit()
-        self.db.refresh(result)
-
-        # Build a map of answered questions
-        answered_questions = {a.question_id: a for a in data.answers}
+        # Persist the result, answers and review dates in one transaction.
+        self.db.flush()
 
         # Grade each answer
         for answer_data in data.answers:
@@ -309,9 +310,8 @@ class QuizService:
 
         # Update result
         result.correct_count = correct_count
-        # Calculate score based on answered questions only (to avoid division by zero)
-        total_answered = len(data.answers)
-        result.score = (correct_count / total_answered * 100) if total_answered > 0 else 0
+        # Skipped questions count as incorrect, matching the frontend grade.
+        result.score = (correct_count / len(questions) * 100) if questions else 0
 
         self.db.commit()
         self.db.refresh(result)
@@ -357,7 +357,7 @@ class QuizService:
                     next_review=next_review,
                     interval_days=interval,
                 ))
-        self.db.commit()
+        # The caller commits together with the completed result and answers.
 
     # ------------------------------------------------------------------
     # Due-review quiz: questions whose spaced-repetition date has come
@@ -374,20 +374,17 @@ class QuizService:
         (correct -> due in 3 days, wrong -> due in 1 day). 404 when
         nothing is due yet."""
         today = today_hcm()
-        q = (
+        if subject_id:
+            self._verify_subject_ownership(subject_id, user_id)
+        query = (
             self.db.query(Review)
-            .filter(Review.user_id == user_id, Review.next_review <= today)
-            .order_by(desc(Review.next_review))
-            .limit(num_questions)
-            .all()
+            .join(QuizQuestion, Review.question_id == QuizQuestion.id)
+            .join(Quiz, QuizQuestion.quiz_id == Quiz.id)
+            .filter(Review.user_id == user_id, Quiz.user_id == user_id, Review.next_review <= today)
         )
         if subject_id:
-            q = [
-                r for r in q
-                if r.question is not None
-                and r.question.quiz is not None
-                and r.question.quiz.subject_id == subject_id
-            ]
+            query = query.filter(Quiz.subject_id == subject_id)
+        q = query.order_by(Review.next_review.asc(), Review.id).limit(num_questions).all()
         if not q:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
