@@ -1,0 +1,238 @@
+[
+  {
+    "check": "root",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "database health",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "register student",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "login student",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "register teacher",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "login teacher",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "profile",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "wrong password",
+    "status": 401,
+    "expected": 401,
+    "pass": true
+  },
+  {
+    "check": "unauthenticated access",
+    "status": 401,
+    "expected": 401,
+    "pass": true
+  },
+  {
+    "check": "create subject",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "list subjects",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "update subject",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "subject ownership",
+    "status": 404,
+    "expected": 404,
+    "pass": true
+  },
+  {
+    "check": "dashboard",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "empty learning path",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "create empty conversation (no AI)",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "get quiz",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "submit partial quiz",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "partial score consistency",
+    "score": 33.33333333333333,
+    "expected_score": 33.333333333333336,
+    "correct_count": 1,
+    "total_questions": 3,
+    "pass": true
+  },
+  {
+    "check": "submit complete quiz",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "quiz history",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "retry wrong answers",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "due review listing",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "cross-subject review creation",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "subject review creation",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "create reading note",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "list reading notes",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "delete reading note",
+    "status": 204,
+    "expected": 204,
+    "pass": true
+  },
+  {
+    "check": "teacher creates class",
+    "status": 201,
+    "expected": 201,
+    "pass": true
+  },
+  {
+    "check": "student cannot create class",
+    "status": 403,
+    "expected": 403,
+    "pass": true
+  },
+  {
+    "check": "join class",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "list joined classes",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "list class members",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "invalid class code",
+    "status": 404,
+    "expected": 404,
+    "pass": true
+  },
+  {
+    "check": "essay history",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "reject unsupported upload",
+    "status": 400,
+    "expected": 400,
+    "pass": true
+  },
+  {
+    "check": "document list",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  },
+  {
+    "check": "delete conversation",
+    "status": 204,
+    "expected": 204,
+    "pass": true
+  },
+  {
+    "check": "logout",
+    "status": 200,
+    "expected": 200,
+    "pass": true
+  }
+]

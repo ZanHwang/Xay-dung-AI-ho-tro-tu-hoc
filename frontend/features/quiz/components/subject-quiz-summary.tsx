@@ -24,6 +24,7 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   const items = quizzes.quizzes.filter((quiz) => quiz.subjectId === subject.id);
   const [viewing, setViewing] = useState<Quiz | null>(null);
   const [viewAutoStart, setViewAutoStart] = useState(false);
+  const [viewAttemptId, setViewAttemptId] = useState<string | null>(null);
   // Forces QuizOverlay to remount on every open, even re-opening the same
   // quiz (e.g. "Xem" then "Làm lại") — guarantees a fresh internal state
   // instead of depending on initialAttemptId happening to differ.
@@ -45,6 +46,9 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   function openView(quiz: Quiz, autoStart: boolean) {
     setActionError("");
     setViewing(quiz);
+    // Snapshot only when opening. A newly submitted result must not rerun
+    // QuizRunner's initialization and auto-start another draft.
+    setViewAttemptId(latestAttemptOf(quiz.id)?.id ?? null);
     setViewAutoStart(autoStart);
     setViewToken((token) => token + 1);
   }
@@ -70,7 +74,7 @@ export function SubjectQuizSummary({ subject, quizzes }: {
         <QuizCreateDialog
           subject={subject}
           quizzes={quizzes}
-          onCreated={(id) => { const quiz = quizzes.quizzes.find((item) => item.id === id); if (quiz) openView(quiz, true); }}
+          onCreated={(id) => { const quiz = quizzes.store.getSnapshot().quizzes.find((item) => item.id === id); if (quiz) openView(quiz, true); }}
         />
       </div>
       {items.length === 0 ? (
@@ -130,12 +134,12 @@ export function SubjectQuizSummary({ subject, quizzes }: {
         key={viewToken}
         quiz={viewing}
         quizzes={quizzes}
-        initialAttemptId={viewing ? latestAttemptOf(viewing.id)?.id ?? null : null}
+        initialAttemptId={viewAttemptId}
         autoStart={viewAutoStart}
         onClose={() => setViewing(null)}
         onSwitchQuiz={(id) => {
-          const next = quizzes.quizzes.find((item) => item.id === id);
-          if (next) setViewing(next);
+          const next = quizzes.store.getSnapshot().quizzes.find((item) => item.id === id);
+          if (next) openView(next, true);
         }}
       />
 

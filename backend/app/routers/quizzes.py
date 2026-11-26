@@ -185,6 +185,23 @@ async def submit_quiz(
     return _result_to_response(result)
 
 
+@router.get("/history/results", response_model=QuizResultListResponse)
+async def get_quiz_history(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    service: QuizService = Depends(get_quiz_service)
+):
+    """Register this static path before /{quiz_id}/results."""
+    results, total = service.get_quiz_results_by_user(
+        current_user.id, None, limit, offset
+    )
+    return QuizResultListResponse(
+        total=total,
+        results=[_result_to_response(r) for r in results]
+    )
+
+
 @router.get("/{quiz_id}/results", response_model=QuizResultListResponse)
 async def get_quiz_results(
     quiz_id: UUID,
@@ -206,25 +223,6 @@ async def get_quiz_results(
 
     results, total = service.get_quiz_results_by_user(
         current_user.id, quiz_id, limit, offset
-    )
-    return QuizResultListResponse(
-        total=total,
-        results=[_result_to_response(r) for r in results]
-    )
-
-
-@router.get("/history/results", response_model=QuizResultListResponse)
-async def get_quiz_history(
-    limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
-    service: QuizService = Depends(get_quiz_service)
-):
-    """
-    Get quiz history for the current user.
-    """
-    results, total = service.get_quiz_results_by_user(
-        current_user.id, None, limit, offset
     )
     return QuizResultListResponse(
         total=total,

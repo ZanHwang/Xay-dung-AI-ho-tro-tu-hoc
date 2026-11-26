@@ -3,6 +3,8 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    # Accepted for older .env files; the worker is no longer used.
+    ai_worker_url: str = ""
     # Database
     database_url: str = "postgresql://user:password@localhost:5432/ai_tutor"
 

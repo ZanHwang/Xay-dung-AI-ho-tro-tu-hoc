@@ -72,6 +72,10 @@ backend/
 
 ## Test
 
+Nếu dùng database PostgreSQL đã tạo trước thay đổi ôn tập nhiều môn, chạy
+`migrations/001_cross_subject_reviews.sql` một lần trước khi dùng tính năng này.
+Database mới được tạo từ model đã hỗ trợ `quizzes.subject_id` để trống.
+
 ```bash
 pytest
 ```

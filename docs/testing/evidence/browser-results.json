@@ -1,0 +1,21 @@
+[
+  {
+    "check": "landing page renders",
+    "pass": true
+  },
+  {
+    "check": "login and dashboard",
+    "pass": true
+  },
+  {
+    "check": "create subject in browser",
+    "pass": true
+  },
+  {
+    "check": "join class in browser",
+    "pass": true
+  },
+  {
+    "browser_errors": []
+  }
+]

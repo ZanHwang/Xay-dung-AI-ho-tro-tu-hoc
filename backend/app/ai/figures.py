@@ -38,7 +38,7 @@ _FIGURE_INTENT_RE = re.compile(
 def _deaccent(s: str) -> str:
     """Lower-case and strip Vietnamese diacritics (NFKD + drop combining marks)."""
     import unicodedata
-    nfkd = unicodedata.normalize("NFKD", s.lower())
+    nfkd = unicodedata.normalize("NFKD", s.lower().replace("đ", "d"))
     return "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
 
 def _question_mentions_figure(question: str) -> bool:

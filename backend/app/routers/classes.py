@@ -42,10 +42,7 @@ def create_class(
     service: ClassService = Depends(get_class_service),
 ):
     """Create a class (teacher only) + auto-enroll the teacher."""
-    out = service.create_class(current_user, data.name)
-    out.setdefault("teacher_id", current_user.id)
-    out.setdefault("students", 1)
-    return out
+    return service.create_class(current_user, data.name)
 
 
 @router.post("/join", response_model=ClassOut)
@@ -55,10 +52,7 @@ def join_class(
     service: ClassService = Depends(get_class_service),
 ):
     """Join a class by its 6-char code (students; teachers may too)."""
-    out = service.join_class(current_user.id, data.code)
-    out.setdefault("teacher_id", None)
-    out.setdefault("students", 0)
-    return out
+    return service.join_class(current_user.id, data.code)
 
 
 @router.get("/{class_id}/members", response_model=list[ClassMemberOut])
