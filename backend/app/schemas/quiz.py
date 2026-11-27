@@ -10,6 +10,10 @@ class QuizBase(BaseModel):
     difficulty: QuizDifficulty = QuizDifficulty.MEDIUM
 
 
+class QuizRename(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+
+
 class QuizCreate(BaseModel):
     subject_id: UUID
     document_id: Optional[UUID] = None
@@ -40,6 +44,10 @@ class QuizQuestionResponse(QuizQuestionBase):
     id: UUID
     quiz_id: UUID
     created_at: datetime
+    # Most recent spaced-repetition outcome for this question (via the
+    # Review table), when it has review history - lets the frontend tag each
+    # question "mới sai" vs "đã đúng" while taking a due-questions session.
+    last_correct: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -48,7 +56,7 @@ class QuizQuestionResponse(QuizQuestionBase):
 class QuizResponse(QuizBase):
     id: UUID
     user_id: UUID
-    subject_id: UUID
+    subject_id: Optional[UUID] = None
     document_id: Optional[UUID] = None
     source: Optional[str] = None  # llm | document | wrong
     created_at: datetime
@@ -83,6 +91,12 @@ class QuizAnswer(BaseModel):
 class QuizSubmit(BaseModel):
     answers: List[QuizAnswer]
     time_spent: Optional[int] = None  # Total time in seconds
+    # When given, scopes this submission to exactly these question ids (e.g. a
+    # review/retry-wrong session covering only part of the quiz's own
+    # questions) - total_questions/score/review-scheduling only consider this
+    # set, the quiz's OTHER questions are left untouched. Omit for a normal
+    # full-quiz submission (covers every question of the quiz).
+    question_ids: Optional[List[UUID]] = None
 
 
 class QuizAnswerResponse(BaseModel):

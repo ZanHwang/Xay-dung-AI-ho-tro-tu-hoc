@@ -21,9 +21,13 @@ import { QuizCreateDialog } from "./quiz-create-dialog";
 export function SubjectQuizSummary({ subject, quizzes }: {
   subject: Subject; quizzes: QuizController;
 }) {
-  const items = quizzes.quizzes.filter((quiz) => quiz.subjectId === subject.id);
+  // "review"/"wrong" quizzes are temporary local sessions over a real quiz's
+  // due/wrong-answered questions (see types.ts::Quiz.submitQuizId) - never
+  // their own created quiz, so this "Danh sách Quiz" never lists them.
+  const items = quizzes.quizzes.filter((quiz) => quiz.subjectId === subject.id && quiz.source !== "review" && quiz.source !== "wrong");
   const [viewing, setViewing] = useState<Quiz | null>(null);
   const [viewAutoStart, setViewAutoStart] = useState(false);
+  const [viewAttemptId, setViewAttemptId] = useState<string | null>(null);
   // Forces QuizOverlay to remount on every open, even re-opening the same
   // quiz (e.g. "Xem" then "Làm lại") — guarantees a fresh internal state
   // instead of depending on initialAttemptId happening to differ.
@@ -45,8 +49,29 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   function openView(quiz: Quiz, autoStart: boolean) {
     setActionError("");
     setViewing(quiz);
+    // Snapshot only when opening - recomputing this on every render (the
+    // old inline expression below) meant a FRESH attempt id was computed
+    // right after submit while QuizRunner was still mounted, re-running its
+    // init effect ([quiz.id, initialAttemptId]) and dropping the user back
+    // into a brand-new draft instead of the result screen.
+    setViewAttemptId(latestAttemptOf(quiz.id)?.id ?? null);
     setViewAutoStart(autoStart);
     setViewToken((token) => token + 1);
+  }
+
+  async function confirmRename() {
+    if (!renaming) return;
+    const quiz = renaming;
+    const trimmed = renameValue.trim();
+    quizzes.store.rename(quiz.id, trimmed);
+    setRenaming(null);
+    if (quiz.backendId) {
+      try {
+        await quizApi.rename(quiz.backendId, trimmed);
+      } catch {
+        // Best-effort: the local rename already took effect either way.
+      }
+    }
   }
 
   async function confirmDelete() {
@@ -66,11 +91,11 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   return (
     <section className="card" style={{ marginTop: 24 }}>
       <div className="row-between" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h3>Lịch sử Quiz</h3>
+        <h3>Danh sách Quiz</h3>
         <QuizCreateDialog
           subject={subject}
           quizzes={quizzes}
-          onCreated={(id) => { const quiz = quizzes.quizzes.find((item) => item.id === id); if (quiz) openView(quiz, true); }}
+          onCreated={(id) => { const quiz = quizzes.store.getSnapshot().quizzes.find((item) => item.id === id); if (quiz) openView(quiz, true); }}
         />
       </div>
       {items.length === 0 ? (
@@ -79,7 +104,7 @@ export function SubjectQuizSummary({ subject, quizzes }: {
         <div className="scroll-list" style={{ marginTop: 16 }}>
           {items.map((quiz) => {
             const latest = latestAttemptOf(quiz.id);
-            const percent = latest ? gradeQuiz(quiz, latest.answers).percent : null;
+            const percent = latest ? gradeQuiz(quiz, latest.answers, latest.questionIds).percent : null;
             const date = latest
               ? new Date(latest.submittedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
               : null;
@@ -91,8 +116,11 @@ export function SubjectQuizSummary({ subject, quizzes }: {
                 </span>
                 <span className="grow">
                   <span className="title block">{quiz.title}</span>
-                  <span className="sub2 block">
-                    {quiz.questions.length} câu · {percent !== null ? `${percent}% · ${date}` : "Chưa nộp"}
+                  <span className="sub2 block" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span className={latest ? "pill pill-green" : "pill pill-grey"} style={{ fontWeight: 600 }}>
+                      {latest ? "Đã làm" : "Chưa làm"}
+                    </span>
+                    <span>{quiz.questions.length} câu{latest ? ` · ${percent}% · ${date}` : ""}</span>
                   </span>
                 </span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -130,12 +158,12 @@ export function SubjectQuizSummary({ subject, quizzes }: {
         key={viewToken}
         quiz={viewing}
         quizzes={quizzes}
-        initialAttemptId={viewing ? latestAttemptOf(viewing.id)?.id ?? null : null}
+        initialAttemptId={viewAttemptId}
         autoStart={viewAutoStart}
         onClose={() => setViewing(null)}
         onSwitchQuiz={(id) => {
-          const next = quizzes.quizzes.find((item) => item.id === id);
-          if (next) setViewing(next);
+          const next = quizzes.store.getSnapshot().quizzes.find((item) => item.id === id);
+          if (next) openView(next, true);
         }}
       />
 
@@ -159,11 +187,7 @@ export function SubjectQuizSummary({ subject, quizzes }: {
             <Button variant="ghost" onClick={() => setRenaming(null)}>Hủy</Button>
             <Button
               disabled={!renameValue.trim()}
-              onClick={() => {
-                if (!renaming) return;
-                quizzes.store.rename(renaming.id, renameValue);
-                setRenaming(null);
-              }}
+              onClick={() => void confirmRename()}
             >
               Lưu
             </Button>

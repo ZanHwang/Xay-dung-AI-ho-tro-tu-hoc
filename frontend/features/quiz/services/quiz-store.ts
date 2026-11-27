@@ -7,17 +7,22 @@ const questionSchema = z.object({
   prompt: z.string().min(1), options: z.array(z.string().min(1)).min(2).max(6),
   correctIndex: z.number().int().nonnegative(), explanation: z.string().min(1),
   backendTopic: z.string().nullable().optional(),
+  backendLastCorrect: z.boolean().nullable().optional(),
 }).refine((question) => question.correctIndex < question.options.length);
 const quizSchema = z.object({
-  id: z.string().min(1), subjectId: z.string().min(1), title: z.string().min(1), createdAt: z.string().datetime(),
+  id: z.string().min(1), subjectId: z.string(), title: z.string().min(1), createdAt: z.string().datetime(),
   adaptive: z.boolean().optional(), difficulty: z.enum(["easy", "medium", "hard"]).optional(),
   backendId: z.string().optional(),
+  submitQuizId: z.string().optional(),
   documentId: z.string().nullable().optional(),
   source: z.enum(["sample", "api", "shared", "weakness", "wrong", "review"]), conversationId: z.string().nullable(),
   questions: z.array(questionSchema).min(1).max(50).refine((questions) => new Set(questions.map((q) => q.id)).size === questions.length),
 });
 const draftSchema = z.object({ id: z.string().min(1), quizId: z.string().min(1), startedAt: z.string().datetime(), answers: z.record(z.number().int().nonnegative()) });
-const attemptSchema = draftSchema.extend({ submittedAt: z.string().datetime(), backendResultId: z.string().optional() });
+const attemptSchema = draftSchema.extend({
+  submittedAt: z.string().datetime(), backendResultId: z.string().optional(),
+  questionIds: z.array(z.string()).optional(),
+});
 const savedSchema = z.object({
   quizzes: z.array(quizSchema), drafts: z.array(draftSchema), attempts: z.array(attemptSchema),
 }).refine((data) => {
@@ -148,7 +153,13 @@ export function createQuizStore(storage: () => StorageAccess, userId?: string) {
 
       const allQuizzes = [...state.quizzes, ...newQuizzes];
       const byBackendId = new Map(allQuizzes.filter((quiz) => quiz.backendId).map((quiz) => [quiz.backendId as string, quiz]));
-      const existingAttemptIds = new Set(state.attempts.map((attempt) => attempt.id));
+      // Match by local id AND backendResultId - a locally-created attempt
+      // keeps its own local id even after the server confirms it under a
+      // different (server-assigned) result id; matching by id alone let a
+      // synced result re-add as a second, duplicate history entry.
+      const existingAttemptIds = new Set(
+        state.attempts.flatMap((attempt) => (attempt.backendResultId ? [attempt.id, attempt.backendResultId] : [attempt.id]))
+      );
       const newAttempts: QuizAttempt[] = [];
       for (const result of apiResults) {
         if (existingAttemptIds.has(result.id)) continue;
@@ -165,6 +176,13 @@ export function createQuizStore(storage: () => StorageAccess, userId?: string) {
           const attempt = attemptSchema.parse({
             id: result.id, quizId: quiz.id, startedAt: toIsoZ(result.created_at),
             answers, submittedAt: toIsoZ(result.created_at), backendResultId: result.id,
+            // The exact scope of this result (every question it covered,
+            // skipped ones included) - not just `answers`' keys, which only
+            // has the ones with a real selected option. Needed so a synced
+            // review/retry-wrong submission (covering only part of this
+            // quiz's own questions) doesn't get its quiz's OTHER questions
+            // wrongly graded as unanswered (see quiz-engine.ts::gradeQuiz).
+            questionIds: result.answers.map((item) => item.question_id),
           });
           newAttempts.push(attempt);
           existingAttemptIds.add(result.id);

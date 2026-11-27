@@ -19,9 +19,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
-
-
 @pytest.fixture(autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=engine)
@@ -31,7 +28,14 @@ def setup_database():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # Scoped to this fixture (not module level) so the override doesn't leak
+    # into other test files sharing the same `app` singleton within one
+    # pytest process.
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 class TestAuth:
@@ -264,8 +268,14 @@ class TestConversations:
         data = response.json()
         assert data["title"] == "Hỏi về toán"
 
-    def test_chat(self, client, auth_headers):
+    def test_chat(self, client, auth_headers, monkeypatch):
         """Test chat endpoint."""
+        from app.ai.llm import llm_manager
+
+        async def fake_generate(*args, **kwargs):
+            return "Offline test response"
+
+        monkeypatch.setattr(llm_manager, "generate", fake_generate)
         response = client.post(
             "/api/conversations/chat",
             json={

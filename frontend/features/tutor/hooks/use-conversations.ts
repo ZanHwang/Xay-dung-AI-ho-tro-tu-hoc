@@ -226,7 +226,16 @@ export function useConversations(userId: string) {
     });
   }
 
-  return { ...state, store, pending, errors, send, remove, loadMessages };
+  return {
+    ...state, store, pending, errors, send, remove, loadMessages,
+    // Re-fetch the conversation list from the backend - `loadConversations`
+    // otherwise only ever runs once, on this hook's own mount (which, since
+    // it's instantiated once at LearningWorkspace and never remounts, means
+    // a conversation created elsewhere on the backend afterwards - e.g. Lộ
+    // trình "Học"'s own ask endpoint - would never show up without this.
+    // Call when the Tutor tab becomes active (see learning-workspace.tsx).
+    refresh: isDemoMode ? () => {} : loadConversations,
+  };
 }
 
 export type ConversationsController = ReturnType<typeof useConversations>;

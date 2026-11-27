@@ -17,7 +17,7 @@ export function SubjectCard({ subject, onOpen, onAskTutor }: SubjectCardProps) {
       <span className={`subj-ic subj-${subject.accent}`}>{subject.shortName}</span>
       <h3>{subject.name}</h3>
       <p>{subject.description}</p>
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-auto pt-4 flex items-center gap-2">
         <button
           type="button"
           onClick={() => onAskTutor(subject.id)}

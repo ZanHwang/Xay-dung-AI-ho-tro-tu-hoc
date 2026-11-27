@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.progress import DashboardResponse
-from app.schemas.review import ReviewDueResponse
+from app.schemas.review import DueQuizzesResponse, DueQuizSummary
 from app.services.progress_service import ProgressService
 from app.utils.security import get_current_user
-from app.utils.dates import today_hcm
-from app.models import User, Review, QuizQuestion
+from app.utils.dates import now_hcm
+from app.models import User, Review, QuizQuestion, Quiz
 
 router = APIRouter()
 
@@ -15,39 +16,35 @@ def get_progress_service(db: Session = Depends(get_db)) -> ProgressService:
     return ProgressService(db)
 
 
-@router.get("/reviews/due", response_model=ReviewDueResponse)
-def reviews_due(
-    limit: int = Query(20, ge=1, le=50),
+@router.get("/reviews/due-quizzes", response_model=DueQuizzesResponse)
+def reviews_due_quizzes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Spaced-repetition: quiz questions whose review date has come due
-    (correct -> +3 days, wrong -> +1 day after answering). The dashboard's
-    'Học tiếp' card pulls from here.
+    Spaced-repetition: quizzes that currently have at least one due question,
+    grouped with a count each (correct -> advance a stage, wrong -> back to
+    stage 0 - see QuizService.REVIEW_SCHEDULE). The dashboard card / header
+    bell open a list built from this, picking one quiz reviews just its own
+    due questions (see GET /quizzes/{quiz_id}/due-questions).
     """
     rows = (
-        db.query(Review, QuizQuestion)
-        .join(QuizQuestion, QuizQuestion.id == Review.question_id)
-        .filter(
-            Review.user_id == current_user.id,
-            Review.next_review <= today_hcm(),
+        db.query(
+            Quiz.id, Quiz.title, Quiz.subject_id,
+            func.count(Review.id), func.min(Review.next_review)
         )
-        .order_by(Review.next_review)
-        .limit(limit)
+        .join(QuizQuestion, QuizQuestion.quiz_id == Quiz.id)
+        .join(Review, Review.question_id == QuizQuestion.id)
+        .filter(Review.user_id == current_user.id, Review.next_review <= now_hcm())
+        .group_by(Quiz.id, Quiz.title, Quiz.subject_id)
+        .order_by(func.min(Review.next_review))
         .all()
     )
-    questions = [
-        {
-            "question_id": r.question_id,
-            "question_text": q.question_text,
-            "options": q.options,
-            "due_date": r.next_review,
-            "interval_days": r.interval_days,
-        }
-        for r, q in rows
+    quizzes = [
+        DueQuizSummary(quiz_id=r[0], title=r[1], subject_id=r[2], due_count=r[3])
+        for r in rows
     ]
-    return ReviewDueResponse(total=len(questions), questions=questions)
+    return DueQuizzesResponse(total=sum(item.due_count for item in quizzes), quizzes=quizzes)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)

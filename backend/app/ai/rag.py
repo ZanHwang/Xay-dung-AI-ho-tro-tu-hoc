@@ -42,7 +42,8 @@ class RAGPipeline:
         query: str,
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
-        limit: int = 5
+        limit: int = 5,
+        score_threshold: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search for relevant document chunks in Qdrant.
@@ -55,6 +56,7 @@ class RAGPipeline:
             user_id=user_id,
             document_ids=document_ids,
             limit=limit,
+            score_threshold=score_threshold,
         )
 
         # Qdrant can return points from documents that no longer exist (a

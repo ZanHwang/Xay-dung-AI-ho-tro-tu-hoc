@@ -2,20 +2,12 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 import json
 from app.ai.rag import RAGPipeline
-from app.ai.llm import llm_manager
+from app.ai.llm import llm_manager, MATH_RULE
 from app.ai.figures import inspect_top_figure
 from app.config import settings
 
 
 # System prompts
-# Note on math: the frontend renders math via remark-math + katex, but ONLY
-# when the model wraps formulas in $...$ (inline) or $$...$$ (display). A bare
-# "x^2" is shown literally. So every math-capable prompt below carries MATH_RULE.
-MATH_RULE = (
-    "- Khi viết công thức / biểu thức toán, LUÔN bọc bằng $...$ (trong câu) và "
-    "$$...$$ (cô lập) để render dạng toán. Ví dụ: $x^2$, $\\frac{a}{b}$, "
-    "$\\int f(x)\\,dx$, $\\log_2 n$ — KHÔNG viết trần như x^2 hay a/b."
-)
 
 # Minimal chat prompt: the app is a thin passthrough between the user and the
 # model. No persona / style instructions - the model answers in its default
@@ -117,11 +109,15 @@ class AIOrchestrator:
         reference material for related questions, not the only source.
         """
         # Search documents
+        # score_threshold=0.5 only drops low-relevance padding from the same
+        # top-8 - it can only return fewer chunks than before, never more, so
+        # this does not add any extra retrieval cost or latency.
         search_results = await self.rag_pipeline.search_documents(
             query=message,
             user_id=user_id,
             document_ids=document_ids,
-            limit=8
+            limit=8,
+            score_threshold=0.5,
         )
 
         # Build context (empty when nothing relevant was retrieved)

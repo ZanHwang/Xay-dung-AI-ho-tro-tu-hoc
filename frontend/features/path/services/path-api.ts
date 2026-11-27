@@ -103,30 +103,33 @@ export const pathApi = {
 
   /**
    * Ask the AI a free-form question about `topic`, scoped to just that one
-   * document, reusing the existing /conversations/chat endpoint (RAG) - no
-   * dedicated backend endpoint for this. `conversationId` should be null on
-   * the first question of a session and then the id this returns for every
-   * follow-up, so the AI keeps the thread's context.
+   * document. The backend resolves (and, on the first question ever, creates)
+   * the ONE conversation tagged to this (document, topic) pair - see
+   * PathService.get_or_create_topic_conversation - so every visit continues
+   * the SAME conversation, on any device, instead of starting a new one.
    */
   async askAboutTopic(
     subjectId: string,
     documentId: string,
     topic: string,
     question: string,
-    conversationId: string | null,
-  ): Promise<{ answer: string; conversationId: string }> {
-    const response = await httpClient.post<{
-      message: { content: string; conversation_id: string };
-    }>("/conversations/chat", {
-      conversation_id: conversationId,
-      content: `[Đang học chủ đề: ${topic}] ${question}`,
-      mode: "rag",
-      subject_id: subjectId,
-      document_ids: [documentId],
-    });
-    return {
-      answer: response.message.content,
-      conversationId: response.message.conversation_id,
-    };
+  ): Promise<{ answer: string }> {
+    const response = await httpClient.post<{ message: { content: string } }>(
+      `/subjects/${subjectId}/path/documents/${documentId}/topics/${encodeURIComponent(topic)}/ask`,
+      { content: question },
+    );
+    return { answer: response.message.content };
+  },
+
+  /**
+   * Past Q&A for this (document, topic), oldest first - empty if nothing has
+   * been asked about it yet. Loaded when "Học" opens so a reopened topic
+   * shows its existing thread instead of starting blank.
+   */
+  async getTopicChatHistory(subjectId: string, documentId: string, topic: string): Promise<TopicChatMessage[]> {
+    const rows = await httpClient.get<Array<{ role: "user" | "assistant"; content: string }>>(
+      `/subjects/${subjectId}/path/documents/${documentId}/topics/${encodeURIComponent(topic)}/chat`,
+    );
+    return rows.map((r) => ({ role: r.role, content: r.content }));
   },
 };

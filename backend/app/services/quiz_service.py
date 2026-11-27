@@ -4,14 +4,22 @@ from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from app.models import Quiz, QuizQuestion, QuizResult, QuizAnswer, Subject, Document, DocumentStatus, SharedQuizQuestion, Review, QuizDifficulty
+from app.models import Quiz, QuizQuestion, QuizResult, QuizAnswer, Subject, Document, DocumentStatus, SharedQuizQuestion, Review
 from app.schemas.quiz import QuizCreate, QuizSubmit
 from app.ai.llm import llm_manager
 from app.ai.rag import RAGPipeline
 from app.utils.subject_key import subject_key_for
-from app.utils.dates import today_hcm
+from app.utils.dates import now_hcm
 from fastapi import HTTPException, status
 import random
+
+# Spaced-repetition ladder (one scale shared by both outcomes): a correct
+# answer advances one stage; a wrong answer at ANY stage drops back to stage 0.
+# Past the last stage, further correct answers just stay at 30 days.
+REVIEW_SCHEDULE = [
+    timedelta(hours=1), timedelta(hours=4), timedelta(hours=24),
+    timedelta(days=3), timedelta(days=7), timedelta(days=14), timedelta(days=30),
+]
 
 
 class QuizService:
@@ -63,6 +71,17 @@ class QuizService:
         self.db.delete(quiz)
         self.db.commit()
         return True
+
+    def rename_quiz(self, quiz_id: UUID, user_id: UUID, title: str) -> Optional[Quiz]:
+        """Rename a quiz. Returns None if it doesn't exist or isn't owned by
+        this user."""
+        quiz = self.get_quiz_by_id(quiz_id, user_id)
+        if not quiz:
+            return None
+        quiz.title = title
+        self.db.commit()
+        self.db.refresh(quiz)
+        return quiz
 
     async def create_quiz(self, user_id: UUID, data: QuizCreate) -> Quiz:
         """Create a new quiz with AI-generated questions.
@@ -232,22 +251,41 @@ class QuizService:
                 detail="Quiz not found"
             )
 
-        # Get all questions
-        questions = (
-            self.db.query(QuizQuestion)
-            .filter(QuizQuestion.quiz_id == quiz_id)
-            .all()
-        )
+        # All questions of the quiz, or only the given subset (a review/
+        # retry-wrong session covering just some of them - see
+        # QuizSubmit.question_ids) - the quiz's OTHER questions are left
+        # completely untouched by this submission either way.
+        questions_query = self.db.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id)
+        if data.question_ids:
+            questions_query = questions_query.filter(QuizQuestion.id.in_(data.question_ids))
+        questions = questions_query.all()
 
-        if len(data.answers) != len(questions):
-            # Allow partial submission - some questions might be skipped
-            if len(data.answers) > len(questions):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Number of answers exceeds number of questions"
-                )
+        if len(data.answers) > len(questions):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Number of answers exceeds number of questions"
+            )
 
-        # Create quiz result
+        # Validate every answer BEFORE writing anything - a bad answer must
+        # reject the whole submission, not get silently dropped after some
+        # rows are already queued for insert.
+        by_id = {question.id: question for question in questions}
+        answered_questions = {a.question_id: a for a in data.answers}
+        if len(answered_questions) != len(data.answers):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duplicate question answers")
+        for answer_data in data.answers:
+            question = by_id.get(answer_data.question_id)
+            if question is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question does not belong to this quiz")
+            options = json.loads(question.options) if isinstance(question.options, str) else question.options
+            if not 0 <= answer_data.selected_answer < len(options):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid answer option")
+
+        # Create quiz result. Not committed yet - flush only assigns result.id
+        # (needed as the FK on QuizAnswer below) without making the write
+        # durable, so a half-graded submission never survives a mid-way
+        # failure as a dangling zero-score result; the whole thing commits as
+        # one transaction at the end instead.
         correct_count = 0
         result = QuizResult(
             user_id=user_id,
@@ -257,17 +295,11 @@ class QuizService:
             score=0
         )
         self.db.add(result)
-        self.db.commit()
-        self.db.refresh(result)
-
-        # Build a map of answered questions
-        answered_questions = {a.question_id: a for a in data.answers}
+        self.db.flush()
 
         # Grade each answer
         for answer_data in data.answers:
-            question = next((q for q in questions if q.id == answer_data.question_id), None)
-            if not question:
-                continue
+            question = by_id[answer_data.question_id]
 
             is_correct = answer_data.selected_answer == question.correct_answer
             if is_correct:
@@ -299,19 +331,18 @@ class QuizService:
                 self.db.add(answer)
                 review_pairs.append((question, False))
 
-        # Schedule spaced reviews for the questions that were answered:
-        # correct -> +3 days, wrong -> +1 day (v2 1-3-7 day cycle).
+        # Schedule spaced reviews for the questions that were answered (see
+        # REVIEW_SCHEDULE).
         for answer_data in data.answers:
-            question = next((q for q in questions if q.id == answer_data.question_id), None)
-            if question:
-                review_pairs.append((question, answer_data.selected_answer == question.correct_answer))
+            question = by_id[answer_data.question_id]
+            review_pairs.append((question, answer_data.selected_answer == question.correct_answer))
         self._schedule_reviews(user_id, review_pairs)
 
-        # Update result
+        # Update result. Skipped questions count as incorrect (denominator is
+        # the full question count, not just how many were answered) -
+        # matches the frontend's own grading (quiz-engine.ts::gradeQuiz).
         result.correct_count = correct_count
-        # Calculate score based on answered questions only (to avoid division by zero)
-        total_answered = len(data.answers)
-        result.score = (correct_count / total_answered * 100) if total_answered > 0 else 0
+        result.score = (correct_count / len(questions) * 100) if questions else 0
 
         self.db.commit()
         self.db.refresh(result)
@@ -319,18 +350,29 @@ class QuizService:
         return result
 
     def _schedule_reviews(self, user_id: UUID, pairs: List[Tuple[QuizQuestion, bool]]) -> None:
-        """Spaced-repetition schedule (v2): correct -> +3 days, wrong -> +1 day.
-        One row per (question, user), upserted so re-answering moves the due date.
+        """Spaced-repetition schedule (graduated ladder - see REVIEW_SCHEDULE):
+        a correct answer advances one stage, a wrong answer at ANY stage resets
+        to stage 0. One row per (question, user) - a review/retry-wrong
+        session answers the quiz's own ORIGINAL questions directly (no copies
+        involved, see QuizSubmit.question_ids), so this always updates the
+        right schedule.
+
+        A correct answer only advances the stage when it's actually due
+        (`now >= next_review`) - answering correctly again before that (e.g.
+        retaking the same quiz right away) doesn't prove real retention, so
+        it leaves stage/next_review untouched instead of "cheating" a jump to
+        a longer interval. A wrong answer always resets to stage 0 regardless
+        of timing - that's real signal whenever it happens.
 
         Dedup by question id first, then fetch every existing Review row for
         this user+question set in ONE query - a quiz can have up to 50
         questions now, and doing this per-question (1 SELECT each) was 50
         round-trips to Neon, a big chunk of the delay users felt on submit.
         """
-        today = today_hcm()
+        now = now_hcm()
         by_question: dict = {}
         for question, is_correct in pairs:
-            by_question[question.id] = (question, is_correct)
+            by_question[question.id] = is_correct
 
         if not by_question:
             return
@@ -343,83 +385,66 @@ class QuizService:
             ).all()
         }
 
-        for question_id, (question, is_correct) in by_question.items():
-            interval = 3 if is_correct else 1
-            next_review = today + timedelta(days=interval)
+        last_stage = len(REVIEW_SCHEDULE) - 1
+        for question_id, is_correct in by_question.items():
             row = existing.get(question_id)
-            if row:
-                row.next_review = next_review
-                row.interval_days = interval
-            else:
+            if not row:
                 self.db.add(Review(
-                    question_id=question.id,
+                    question_id=question_id,
                     user_id=user_id,
-                    next_review=next_review,
-                    interval_days=interval,
+                    next_review=now + REVIEW_SCHEDULE[0],
+                    stage=0,
+                    last_correct=is_correct,
                 ))
+                continue
+            row.last_correct = is_correct
+            if not is_correct:
+                row.stage = 0
+                row.next_review = now + REVIEW_SCHEDULE[0]
+            elif now >= row.next_review:
+                row.stage = min(row.stage + 1, last_stage)
+                row.next_review = now + REVIEW_SCHEDULE[row.stage]
+            # else: correct but tested early - leave stage/next_review as is.
         self.db.commit()
 
     # ------------------------------------------------------------------
-    # Due-review quiz: questions whose spaced-repetition date has come
+    # Due-review: questions whose spaced-repetition date has come - a
+    # read-only view of the ORIGINAL quiz's own questions, never a new Quiz.
+    # Submitting it posts back to the same quiz_id with QuizSubmit.question_ids
+    # set to just this subset (see routers/quizzes.py's /submit).
     # ------------------------------------------------------------------
 
-    def create_quiz_from_review(
-        self,
-        user_id: UUID,
-        subject_id: Optional[UUID] = None,
-        num_questions: int = 10,
-        difficulty="medium",
-    ) -> Quiz:
-        """Build a review quiz from the questions due for spaced review
-        (correct -> due in 3 days, wrong -> due in 1 day). 404 when
-        nothing is due yet."""
-        today = today_hcm()
-        q = (
-            self.db.query(Review)
-            .filter(Review.user_id == user_id, Review.next_review <= today)
-            .order_by(desc(Review.next_review))
-            .limit(num_questions)
-            .all()
-        )
-        if subject_id:
-            q = [
-                r for r in q
-                if r.question is not None
-                and r.question.quiz is not None
-                and r.question.quiz.subject_id == subject_id
-            ]
-        if not q:
+    def get_due_questions(self, user_id: UUID, quiz_id: UUID) -> Tuple[Quiz, List[QuizQuestion]]:
+        """The given quiz's own questions whose review date has come due (see
+        REVIEW_SCHEDULE), returned alongside the quiz itself WITHOUT touching
+        its real `questions` relationship (reassigning that would make
+        SQLAlchemy's cascade="all, delete-orphan" delete the other questions
+        for real on the next flush). 404 when the quiz doesn't exist/isn't the
+        user's, or nothing of it is due yet."""
+        quiz = self.get_quiz_by_id(quiz_id, user_id)
+        if not quiz:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+        now = now_hcm()
+        due_question_ids = {
+            row.question_id
+            for row in (
+                self.db.query(Review)
+                .join(QuizQuestion, QuizQuestion.id == Review.question_id)
+                .filter(
+                    Review.user_id == user_id,
+                    Review.next_review <= now,
+                    QuizQuestion.quiz_id == quiz_id,
+                )
+                .all()
+            )
+        }
+        due_questions = [q for q in quiz.questions if q.id in due_question_ids]
+        if not due_questions:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Chưa có câu hỏi nào đến hạn ôn tập.",
             )
-        diff = None
-        try:
-            diff = QuizDifficulty(difficulty) if not hasattr(difficulty, "value") else difficulty
-        except ValueError:
-            diff = None
-        quiz = Quiz(
-            user_id=user_id,
-            subject_id=subject_id,
-            title="Ôn tập đến hạn",
-            difficulty=diff or "medium",
-            source="review",
-        )
-        self.db.add(quiz)
-        self.db.commit()
-        self.db.refresh(quiz)
-        for r in q:
-            src = r.question
-            self.db.add(QuizQuestion(
-                quiz_id=quiz.id,
-                question_text=src.question_text,
-                options=src.options,
-                correct_answer=src.correct_answer,
-                explanation=src.explanation,
-            ))
-        self.db.commit()
-        self.db.refresh(quiz)
-        return quiz
+        return quiz, due_questions
 
     def get_quiz_result(
         self, quiz_id: UUID, result_id: UUID, user_id: UUID
@@ -451,12 +476,13 @@ class QuizService:
         return results, total
 
     # ------------------------------------------------------------------
-    # Review quizzes: retry-wrong
+    # Retry-wrong: a read-only view of the questions failed in one past
+    # result - never a new Quiz (same reasoning as get_due_questions above).
     # ------------------------------------------------------------------
 
-    def create_quiz_from_wrong(self, user_id: UUID, result_id: UUID) -> Quiz:
-        """Retry quiz: a new quiz made of the questions the user FAILED
-        in a specific result. 404 when there is nothing to retry."""
+    def get_wrong_questions(self, user_id: UUID, result_id: UUID) -> Tuple[Quiz, List[QuizQuestion]]:
+        """The ORIGINAL quiz of the given result, alongside just the
+        questions the user FAILED in it. 404 when there is nothing to retry."""
         result = (
             self.db.query(QuizResult)
             .filter(QuizResult.id == result_id, QuizResult.user_id == user_id)
@@ -467,36 +493,15 @@ class QuizService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy kết quả làm bài.",
             )
-        wrong_answers = [a for a in result.answers if not a.is_correct and a.question]
-        if not wrong_answers:
+        wrong_questions = [a.question for a in result.answers if not a.is_correct and a.question]
+        if not wrong_questions:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Bài này không có câu sai để làm lại.",
             )
-        original_quiz = result.quiz
-        quiz = Quiz(
-            user_id=user_id,
-            subject_id=original_quiz.subject_id if original_quiz else None,
-            document_id=original_quiz.document_id if original_quiz else None,
-            title="Làm lại câu sai",
-            difficulty=original_quiz.difficulty if original_quiz else "medium",
-            source="wrong",
-        )
-        self.db.add(quiz)
-        self.db.commit()
-        self.db.refresh(quiz)
-        for a in wrong_answers:
-            q = a.question
-            self.db.add(QuizQuestion(
-                quiz_id=quiz.id,
-                question_text=q.question_text,
-                options=q.options,
-                correct_answer=q.correct_answer,
-                explanation=q.explanation,
-            ))
-        self.db.commit()
-        self.db.refresh(quiz)
-        return quiz
+        if not result.quiz:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+        return result.quiz, wrong_questions
 
     # ------------------------------------------------------------------
     # Simple subject-scoped quiz: shared bank + verified AI + dedup
@@ -522,6 +527,24 @@ class QuizService:
         if exclude_texts:
             query = query.filter(~SharedQuizQuestion.question_text.in_(exclude_texts))
         return query.limit(limit).all()
+
+    def get_known_topics(self, subject_id: UUID, user_id: UUID) -> List[str]:
+        """Custom topics ("Chủ đề khác…") that have actually produced at
+        least one AI-verified quiz question before, for this subject's shared
+        bank (see subject_key_for - shared by subject NAME across users, same
+        as the rest of the bank). Offered as quick picks for next time instead
+        of retyping, since the topic is proven valid. Independent of Lộ
+        trình, which needs topics tied to one specific document - this list
+        is subject-wide and not tied to any document."""
+        subject = self._verify_subject_ownership(subject_id, user_id)
+        skey = self._subject_key(subject)
+        rows = (
+            self.db.query(SharedQuizQuestion.topic)
+            .filter(SharedQuizQuestion.subject_key == skey, SharedQuizQuestion.topic.isnot(None))
+            .distinct()
+            .all()
+        )
+        return sorted({row[0] for row in rows})
 
     async def suggest_topics_for_subject(
         self,
@@ -682,14 +705,18 @@ class QuizService:
         # Distinguish repeated quizzes of the same scope ("Tổng hợp", or a
         # given topic) with a running count instead of a title that's
         # identical every time (previously `subject.name` when all_knowledge,
-        # so every "Tổng hợp" quiz in a subject shared one title).
+        # so every "Tổng hợp" quiz in a subject shared one title). Counted by
+        # the `topic` column itself (exact match), not a title LIKE pattern -
+        # a topic that's a prefix of another ("Entropy" vs "Entropy có điều
+        # kiện") would otherwise inflate the wrong one's count.
         label = topic.strip() if topic else "Tổng hợp"
+        quiz_topic = topic.strip() if (topic and not all_knowledge) else None
         existing_count = (
             self.db.query(Quiz)
             .filter(
                 Quiz.user_id == user_id,
                 Quiz.subject_id == subject_id,
-                Quiz.title.like(f"{label} #%"),
+                Quiz.topic == quiz_topic,
             )
             .count()
         )
@@ -697,12 +724,12 @@ class QuizService:
             user_id=user_id,
             subject_id=subject_id,
             document_id=document_id,
-            title=f"{label} #{existing_count + 1}",
+            title=f"{label} - Bài số {existing_count + 1}",
             # Recorded so Lộ trình (path_service.document_topic_groups) can
             # later tell which quizzes count toward which (document, topic)
             # path's progress. NULL for "Tổng hợp"/all-knowledge quizzes -
             # those don't count toward any one topic.
-            topic=topic.strip() if (topic and not all_knowledge) else None,
+            topic=quiz_topic,
             difficulty=diff,
             source="ai" if used_ai else "shared",
         )

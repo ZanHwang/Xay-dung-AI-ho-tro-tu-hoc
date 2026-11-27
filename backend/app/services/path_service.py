@@ -22,9 +22,10 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 from fastapi import HTTPException
 
-from app.models import Subject, Quiz, QuizResult, Document, DocumentStatus, TopicLesson
+from app.models import Subject, Quiz, QuizResult, Document, DocumentStatus, TopicLesson, Conversation, Message
 from app.ai.llm import llm_manager
 from app.ai.rag import RAGPipeline
 from app.services.quiz_service import QuizService, backfill_document_topics_in_background
@@ -173,24 +174,106 @@ class PathService:
         excerpts: List[dict] = []
         context = ""
         rag = RAGPipeline()
-        results = await rag.search_documents(query=topic, user_id=user_id, document_ids=[document.id], limit=6)
+        # No fixed top-N: cosine score has no natural "this many exist" cutoff
+        # of its own, so a fixed limit either pads with barely-related chunks
+        # (a narrow topic) or hides genuinely relevant ones (a broad topic).
+        # score_threshold is the real cutoff; `limit=30` is just a sanity cap.
+        # 0.5 is a starting point from one real sample (see commit message /
+        # PROJECT-OVERVIEW.md) - may need retuning once used across more
+        # documents and topics.
+        results = await rag.search_documents(
+            query=topic, user_id=user_id, document_ids=[document.id], limit=30, score_threshold=0.5,
+        )
         context = rag.build_context(topic, results)
         for r in results:
+            page = rag._page_of(r)
+            # Skip chunks with no resolvable page for DISPLAY only - no page
+            # means no slide image can be shown (see ExcerptPage), so keeping
+            # them just repeated the filename with nothing useful under it.
+            # `context` above (what the AI summary is grounded in) still uses
+            # every thresholded result, page or not.
+            if not page:
+                continue
             excerpts.append({
                 "document_name": r.get("document_name") or document.filename,
-                "page": rag._page_of(r),
+                "page": page,
                 "content": r.get("content") or "",
             })
 
         summary = await llm_manager.summarize_topic(subject.name, topic, context or None)
 
-        lesson = TopicLesson(
-            document_id=document_id,
-            topic=topic,
-            summary=summary,
-            excerpts_json=json.dumps(excerpts, ensure_ascii=False),
-        )
-        self.db.add(lesson)
-        self.db.commit()
+        def _new_lesson() -> TopicLesson:
+            return TopicLesson(
+                document_id=document_id,
+                topic=topic,
+                summary=summary,
+                excerpts_json=json.dumps(excerpts, ensure_ascii=False),
+            )
+
+        lesson = _new_lesson()
+        try:
+            self.db.add(lesson)
+            self.db.commit()
+        except OperationalError:
+            # Neon's pooler can silently drop an idle DB connection while the
+            # slow RAG search + LLM summary call above were running (this
+            # session held it open the whole time) - pool_pre_ping only
+            # re-validates a connection at CHECKOUT, not mid-request, so a
+            # connection that died in between isn't caught until this write.
+            # One retry, with a fresh object, gets a new pre_ping-validated
+            # connection and almost always succeeds.
+            self.db.rollback()
+            lesson = _new_lesson()
+            self.db.add(lesson)
+            self.db.commit()
         self.db.refresh(lesson)
         return lesson
+
+    def get_or_create_topic_conversation(
+        self, subject_id: UUID, user_id: UUID, document_id: UUID, topic: str
+    ) -> Conversation:
+        """The ONE conversation for this user's (document, topic) Q&A in the
+        "Học" screen - found by those exact tags, or created the first time.
+        Reusing the same row (not a new one per visit) is what lets "Hỏi
+        thêm AI" continue the same conversation across every reopen, on any
+        device (this is a real DB row, not browser-local state)."""
+        self._verify_document(subject_id, user_id, document_id)
+        existing = (
+            self.db.query(Conversation)
+            .filter(
+                Conversation.user_id == user_id,
+                Conversation.document_id == document_id,
+                Conversation.topic == topic,
+            )
+            .first()
+        )
+        if existing:
+            return existing
+        conversation = Conversation(
+            user_id=user_id,
+            subject_id=subject_id,
+            document_id=document_id,
+            topic=topic,
+            title=f"Học: {topic}",
+        )
+        self.db.add(conversation)
+        self.db.commit()
+        self.db.refresh(conversation)
+        return conversation
+
+    def get_topic_chat_history(
+        self, subject_id: UUID, user_id: UUID, document_id: UUID, topic: str
+    ) -> List[Message]:
+        """Past Q&A for this (document, topic), oldest first - empty when
+        nothing has been asked about it yet (no conversation created so far)."""
+        self._verify_document(subject_id, user_id, document_id)
+        conversation = (
+            self.db.query(Conversation)
+            .filter(
+                Conversation.user_id == user_id,
+                Conversation.document_id == document_id,
+                Conversation.topic == topic,
+            )
+            .first()
+        )
+        return conversation.messages if conversation else []

@@ -117,6 +117,19 @@ export const subjectApi = {
   async getStats(id: string): Promise<SubjectStats> {
     return httpClient.get(`/subjects/${id}/stats`);
   },
+
+  /**
+   * Subject names that already exist (across every user) - lets someone
+   * naming a new subject reuse an existing name instead of a slightly
+   * different spelling, so they land on the SAME shared question bank (two
+   * subjects named differently enough end up as two separate pools - see
+   * backend subject_key_for). `query` filters (contains, case-insensitive).
+   */
+  async getKnownNames(query?: string): Promise<string[]> {
+    const qs = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+    const response: { names: string[] } = await httpClient.get(`/subjects/known-names/${qs}`);
+    return response.names ?? [];
+  },
 };
 
 // =============================================================================

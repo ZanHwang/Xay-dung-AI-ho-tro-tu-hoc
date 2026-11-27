@@ -58,7 +58,7 @@ export function DashboardPage({
 }: DashboardPageProps) {
   const current = subjects[0];
   const { data: dashboard, loading, error, refresh } = useDashboard();
-  const { due: dueReviews } = useDueReviews(5);
+  const { total: dueTotal } = useDueReviews();
   const recentChats = [...conversations]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 3);
@@ -121,34 +121,25 @@ export function DashboardPage({
         </div>
       )}
 
-      {/* Spaced-repetition: câu đến hạn ôn hôm nay - 1 card gọn thay cho
-          hàng kpi-row + card riêng trước đây. */}
-      <section className="card" style={{ marginTop: 24, borderColor: dueReviews.length > 0 ? "var(--c-sky)" : undefined }}>
+      {/* Spaced-repetition: câu đến hạn ôn hôm nay - cùng 1 số thật với chuông
+          header (useDueReviews), bấm vào mở popup chọn quiz để ôn (xem
+          LearningWorkspace/useQuizOverlay). */}
+      <section className="card" style={{ marginTop: 24, borderColor: dueTotal > 0 ? "var(--c-sky)" : undefined }}>
         <div className="row-between">
           <div className="flex items-center gap-2">
             <BellRing className="size-4" style={{ color: "var(--c-sky)" }} />
-            <h3 style={{ margin: 0 }}>Câu đến hạn ôn hôm nay{dueReviews.length > 0 ? ` (${dueReviews.length})` : ""}</h3>
+            <h3 style={{ margin: 0 }}>Câu đến hạn ôn hôm nay{dueTotal > 0 ? ` (${dueTotal})` : ""}</h3>
           </div>
-          {dueReviews.length > 0 ? (
+          {dueTotal > 0 ? (
             <button type="button" className="btn btn-sm btn-outline" onClick={() => onOpenReview()}>
               Ôn ngay <ArrowUpRight className="size-4" />
             </button>
           ) : null}
         </div>
-        {dueReviews.length > 0 ? (
-          <>
-            <p className="meta" style={{ marginTop: 4 }}>Ôn đúng sẽ tăng khoảng nhắc lại lần sau.</p>
-            <ul style={{ listStyle: "none", margin: "16px 0 0", padding: 0 }}>
-              {dueReviews.slice(0, 3).map((q) => (
-                <li key={q.question_id} className="list-row">
-                  <span className="dot" aria-hidden="true" />
-                  <span className="grow sub2">{q.question_text}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
+        {dueTotal === 0 ? (
           <p className="sub" style={{ marginTop: 4 }}>Không có câu nào đến hạn ôn hôm nay.</p>
+        ) : (
+          <p className="meta" style={{ marginTop: 4 }}>Ôn đúng sẽ tăng khoảng nhắc lại lần sau.</p>
         )}
       </section>
 

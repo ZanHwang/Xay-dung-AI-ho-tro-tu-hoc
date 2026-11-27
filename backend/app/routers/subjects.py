@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 from app.database import get_db
+from typing import Optional
 from app.schemas.subject import (
-    SubjectCreate, SubjectUpdate, SubjectResponse, SubjectListResponse, SubjectStats
+    SubjectCreate, SubjectUpdate, SubjectResponse, SubjectListResponse, SubjectStats,
+    SubjectNamesResponse,
 )
 from app.services.subject_service import SubjectService
 from app.utils.security import get_current_user
@@ -38,6 +40,22 @@ def get_subjects(
         subject_responses.append(subject_data)
 
     return SubjectListResponse(total=len(subject_responses), subjects=subject_responses)
+
+
+@router.get("/known-names/", response_model=SubjectNamesResponse)
+def get_known_subject_names(
+    q: Optional[str] = Query(None, description="Filter (contains, case-insensitive)"),
+    current_user: User = Depends(get_current_user),
+    service: SubjectService = Depends(get_subject_service)
+):
+    """
+    Subject names that already exist (across every user) - lets someone
+    naming a new subject reuse an existing name instead of a slightly
+    different spelling, so they land on the SAME shared question bank (see
+    SubjectService.get_known_names). Must be registered before `/{subject_id}`
+    so "known-names" isn't parsed as a subject id.
+    """
+    return SubjectNamesResponse(names=service.get_known_names(q))
 
 
 @router.post("/", response_model=SubjectResponse, status_code=status.HTTP_201_CREATED)

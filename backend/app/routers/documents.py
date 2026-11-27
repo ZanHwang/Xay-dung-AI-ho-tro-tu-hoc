@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, status, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
@@ -10,6 +10,7 @@ from app.schemas.document import (
     DocumentResponse, DocumentListResponse, DocumentStatusResponse, DocumentProcessRequest
 )
 from app.services.document_service import DocumentService, resolve_document_path
+from app.ai.document_processor import render_page_png
 from app.services.quiz_service import backfill_document_topics_in_background
 from app.models.document import DocumentStatus
 from app.config import settings
@@ -172,6 +173,28 @@ async def get_document_figure(
         media_type = "image/jpeg" if file_path.lower().endswith((".jpg", ".jpeg")) else "image/png"
         return FileResponse(path=file_path, media_type=media_type, filename=filename)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+
+
+@router.get("/{document_id}/pages/{page_no}/image")
+async def get_document_page_image(
+    document_id: UUID,
+    page_no: int,
+    current_user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+):
+    """Rasterize one page of the document's original PDF as a PNG - lets the
+    frontend show the actual slide/page alongside a RAG excerpt's text (see
+    Lộ trình "Học" screen), not just the extracted text. Rendered on demand,
+    no cache - this isn't a hot path (only "Học" calls it) and PyMuPDF
+    rendering one page is fast enough.
+    """
+    document = service.get_document_by_id(document_id, current_user.id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    png = render_page_png(resolve_document_path(document), page_no)
+    if not png:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/{document_id}/status", response_model=DocumentStatusResponse)

@@ -316,6 +316,22 @@ export async function downloadDocumentFigure(documentId: string, filename: strin
   return response.blob();
 }
 
+/**
+ * Rasterized image of one page of the document's original PDF (see Lộ trình
+ * "Học" screen's excerpts). Same auth-protected fetch pattern as
+ * `downloadDocumentFigure` - an `<img src>` cannot send a bearer header.
+ */
+export async function downloadDocumentPage(documentId: string, pageNo: number): Promise<Blob> {
+  const response = await fetch(
+    buildUrl(`/documents/${encodeURIComponent(documentId)}/pages/${pageNo}/image`),
+    { method: "GET", headers: buildAuthHeaders(false) }
+  );
+  if (!response.ok) {
+    return parseErrorFromResponse(response, `Không tải được trang (${response.status}).`);
+  }
+  return response.blob();
+}
+
 // =============================================================================
 // Public service object
 // =============================================================================

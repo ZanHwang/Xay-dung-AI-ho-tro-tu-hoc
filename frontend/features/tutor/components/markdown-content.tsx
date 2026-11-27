@@ -10,6 +10,19 @@ type MarkdownContentProps = {
   className?: string;
 };
 
+// remark-math only recognizes $...$/$$...$$ - but the model (and OCR'd
+// document text, see backend/app/ai/vision.py) sometimes uses the other
+// common LaTeX delimiters \(...\)/\[...\] instead, which would otherwise show
+// up as raw text. Normalize those to $/$$ BEFORE handing the text to
+// ReactMarkdown, so math renders regardless of which style was used -
+// applies everywhere this component is used (chat, RAG, "Học"), not just
+// wherever a caller remembered to ask the model nicely.
+function normalizeMathDelimiters(text: string): string {
+  return text
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_match, expr: string) => `$$${expr}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_match, expr: string) => `$${expr}$`);
+}
+
 export function MarkdownContent({ children, className }: MarkdownContentProps) {
   const components = useMemo(
     () =>
@@ -36,6 +49,8 @@ export function MarkdownContent({ children, className }: MarkdownContentProps) {
     return <p className="whitespace-pre-wrap break-words text-sm leading-6">{children}</p>;
   }
 
+  const normalized = normalizeMathDelimiters(children);
+
   return (
     <div className={`text-sm ${className ?? ""}`}>
       <ReactMarkdown
@@ -43,7 +58,7 @@ export function MarkdownContent({ children, className }: MarkdownContentProps) {
         rehypePlugins={[rehypeKatex]}
         components={components}
       >
-        {children}
+        {normalized}
       </ReactMarkdown>
     </div>
   );

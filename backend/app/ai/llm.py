@@ -3,6 +3,17 @@ import httpx
 import json
 from app.config import settings
 
+# Note on math: the frontend renders math via remark-math + katex, but ONLY
+# when the model wraps formulas in $...$ (inline) or $$...$$ (display). A bare
+# "x^2" is shown literally. So every math-capable prompt carries MATH_RULE.
+# Defined here (not orchestrator.py, which imports llm_manager FROM this
+# module) so orchestrator.py/reading_service.py can import it without a cycle.
+MATH_RULE = (
+    "- Khi viết công thức / biểu thức toán, LUÔN bọc bằng $...$ (trong câu) và "
+    "$$...$$ (cô lập) để render dạng toán. Ví dụ: $x^2$, $\\frac{a}{b}$, "
+    "$\\int f(x)\\,dx$, $\\log_2 n$ — KHÔNG viết trần như x^2 hay a/b."
+)
+
 
 class LLMProvider:
     """Abstract LLM provider interface."""
@@ -372,7 +383,7 @@ trong môn "{subject}" bằng kiến thức chung (chưa có tài liệu nào c�
 chủ đề này). Viết bằng tiếng Việt, khoảng 150-250 từ, văn phong gần gũi như đang
 giảng cho người mới học. Mở đầu bằng 1 câu lưu ý ngắn là nội dung này chưa được
 đối chiếu với tài liệu cụ thể của người học."""
-        response = await self.generate(prompt)
+        response = await self.generate(prompt + "\n\n" + MATH_RULE)
         return response.strip()
 
     async def grade_essay(self, prompt: str, rubric_json: str, essay: str) -> Optional[Dict[str, Any]]:

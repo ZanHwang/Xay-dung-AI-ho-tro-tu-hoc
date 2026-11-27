@@ -20,6 +20,27 @@ class SubjectService:
             .all()
         )
 
+    def get_known_names(self, query: Optional[str] = None, limit: int = 300) -> List[str]:
+        """Distinct subject names that already exist (across EVERY user, not
+        just the caller's own) - lets someone naming a new subject pick an
+        existing, slightly-differently-spelled name instead of inventing yet
+        another variant. Matters because the shared question bank is keyed by
+        subject_key_for(name) (quiz_service.py/subject_key.py): two subjects
+        named "NLP" and "Xử lý ngôn ngữ tự nhiên" (or just different casing/
+        spacing the alias list doesn't cover) end up as two SEPARATE pools
+        instead of sharing one. Cross-user by design, same sharing scope as
+        the bank itself.
+
+        `query` is rarely used now - the frontend fetches once (no query,
+        this default limit) and filters client-side as the user types, to
+        stay instant instead of a per-keystroke round trip. Kept as an
+        optional server-side narrowing for any other caller that does want it."""
+        q = self.db.query(Subject.name).distinct()
+        if query and query.strip():
+            q = q.filter(Subject.name.ilike(f"%{query.strip()}%"))
+        rows = q.order_by(Subject.name).limit(limit).all()
+        return [row[0] for row in rows]
+
     def get_subject_by_id(self, subject_id: UUID, user_id: UUID) -> Optional[Subject]:
         """Get a subject by ID, ensuring user ownership."""
         subject = (

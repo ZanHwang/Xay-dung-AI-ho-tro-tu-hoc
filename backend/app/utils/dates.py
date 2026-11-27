@@ -1,10 +1,10 @@
 """Date helpers shared across services that are NOT gamification-specific.
 
-`today_hcm()` is used by quiz_service.py's spaced-repetition scheduling
-(1-3-7 day review cycle) - kept independent of GamificationService so it
-survives the gamification feature's removal.
+`now_hcm()` is used by quiz_service.py's spaced-repetition scheduling
+(graduated 1h/4h/24h/3d/7d/14d/30d review ladder) - kept independent of
+GamificationService so it survives the gamification feature's removal.
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 try:
     from zoneinfo import ZoneInfo
@@ -14,6 +14,7 @@ except Exception:  # pragma: no cover
     TZ = timezone(timedelta(hours=7))
 
 
-def today_hcm() -> date:
-    """Today's date in Asia/Ho_Chi_Minh (review due-dates are per local day)."""
-    return datetime.now(TZ).date()
+def now_hcm() -> datetime:
+    """Current naive datetime in Asia/Ho_Chi_Minh (review due-times are
+    scheduled in hours/days from this moment)."""
+    return datetime.now(TZ).replace(tzinfo=None)

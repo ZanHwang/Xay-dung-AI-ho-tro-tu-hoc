@@ -88,7 +88,7 @@ class ClassService:
         self.db.add(Enrollment(class_id=room.id, user_id=user.id))
         self.db.commit()
         self.db.refresh(room)
-        return {"id": room.id, "name": room.name, "code": room.code}
+        return self._out(room)
 
     def join_class(self, user_id: UUID, code: str) -> dict:
         code = (code or "").strip().upper()
@@ -103,7 +103,7 @@ class ClassService:
         if not exists:
             self.db.add(Enrollment(class_id=room.id, user_id=user_id))
             self.db.commit()
-        return {"id": room.id, "name": room.name, "code": room.code}
+        return self._out(room)
 
     def members(self, class_id: UUID) -> List[dict]:
         room = self.db.query(ClassRoom).filter(ClassRoom.id == class_id).first()

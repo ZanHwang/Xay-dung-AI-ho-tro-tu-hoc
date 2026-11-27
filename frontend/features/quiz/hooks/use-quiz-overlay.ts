@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Quiz } from "../types";
 import type { QuizController } from "./use-quizzes";
 import { quizApi } from "../services/quiz-api";
+import { reviewStore } from "@/features/reviews/services/review-store";
 
 /**
  * One quiz-viewing popup (QuizOverlay), shared app-wide - lifted out of
@@ -23,6 +24,7 @@ export function useQuizOverlay(quizzes: QuizController) {
   const [token, setToken] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [dueDialogOpen, setDueDialogOpen] = useState(false);
 
   function open(quiz: Quiz, opts?: { attemptId?: string; autoStart?: boolean }) {
     setViewing(quiz);
@@ -43,27 +45,44 @@ export function useQuizOverlay(quizzes: QuizController) {
     if (next) open(next, { autoStart: true });
   }
 
-  /** Spaced-repetition: pull questions whose review date has come due and
-   * open them straight into a fresh attempt. Cross-subject by nature (a
-   * review quiz isn't scoped to one subject), so this never navigates
-   * anywhere - it just opens the popup wherever the caller already is. */
-  async function openReview() {
+  /** Opens the due-review popup (lists quizzes with due questions - see
+   * DueReviewDialog) - the entry point from both the header bell and the
+   * Dashboard card's "Ôn ngay". Forces a fresh fetch every time it's opened
+   * (not just once per page load) - the cached list (reviewStore) can go
+   * stale after things like renaming a quiz or finishing a review elsewhere
+   * in this same session, and nothing else re-triggers a refetch. */
+  function openDueDialog() {
+    setDueDialogOpen(true);
+    void reviewStore.refresh();
+  }
+
+  function closeDueDialog() {
+    setDueDialogOpen(false);
+  }
+
+  /** Picked one quiz from the due-review popup: pull just THAT quiz's own
+   * due questions (read-only - no quiz is created, see quizApi.dueQuestions)
+   * and open them straight into a fresh attempt, in a throwaway LOCAL-only
+   * session (submitQuizId points back at the real quiz - see types.ts). */
+  async function startReview(quizId: string) {
+    setDueDialogOpen(false);
     setReviewLoading(true);
     setReviewError("");
     try {
-      const quiz = await quizApi.createFromReview({ num_questions: 5, difficulty: "medium" });
+      const quiz = await quizApi.dueQuestions(quizId);
       if (!quiz.questions.length) {
         setReviewError("Chưa có câu nào đến hạn ôn tập.");
         return;
       }
       const id = quizzes.store.create({
         subjectId: quiz.subjectId || "",
-        title: quiz.title,
+        title: `Ôn tập: ${quiz.title}`,
         difficulty: quiz.difficulty,
         source: "review",
         conversationId: null,
         questions: quiz.questions,
-        backendId: quiz.backendId,
+        backendId: undefined,
+        submitQuizId: quiz.backendId,
       });
       // Read the store's live snapshot directly instead of `quizzes.quizzes`
       // (the hook's own snapshot from this render) - store.create() commits
@@ -78,7 +97,11 @@ export function useQuizOverlay(quizzes: QuizController) {
     }
   }
 
-  return { viewing, attemptId, autoStart, token, open, close, switchTo, openReview, reviewLoading, reviewError };
+  return {
+    viewing, attemptId, autoStart, token, open, close, switchTo,
+    dueDialogOpen, openDueDialog, closeDueDialog, startReview,
+    reviewLoading, reviewError,
+  };
 }
 
 export type QuizOverlayController = ReturnType<typeof useQuizOverlay>;

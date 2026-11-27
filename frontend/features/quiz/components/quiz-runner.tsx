@@ -44,6 +44,10 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // State updates are async/batched - a rapid double-click could pass the
+  // `submitting` state check twice before it flips. A ref guard is
+  // synchronous, so it actually blocks the second call.
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   // Topic to open in the read-only "Xem lại kiến thức" dialog (see
   // TopicLearnDialog mode="review") - set from a wrong answer's own topic.
@@ -55,7 +59,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
 
   const draft = quizzes.drafts.find((item) => item.quizId === quiz.id);
   const attempt = quizzes.attempts.find((item) => item.id === attemptId && item.quizId === quiz.id);
-  const result = attempt ? gradeQuiz(quiz, attempt.answers) : null;
+  const result = attempt ? gradeQuiz(quiz, attempt.answers, attempt.questionIds) : null;
   const unanswered = draft ? quiz.questions.filter((q) => draft.answers[q.id] === undefined).length : 0;
   const pastAttempts = [...quizzes.attempts]
     .filter((item) => item.quizId === quiz.id)
@@ -90,19 +94,29 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   }, [quiz.id, initialAttemptId]);
 
   async function submit() {
-    if (!draft || submitting) return;
+    if (!draft || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
+    setError("");
     try {
       const isBackend = ["api", "shared", "wrong", "review"].includes(quiz.source ?? "");
       let backendResultId;
       if (isBackend) {
         // Persist the result on the backend (spaced-repetition review
         // scheduling). Best-effort: the local grade (UI) still works even
-        // if the backend call fails.
+        // if the backend call fails, but the user must be told the result
+        // isn't actually saved server-side. submitQuizId (set only for a
+        // review/retry-wrong session, see types.ts) posts to the REAL
+        // original quiz, scoped to just this session's own questions - never
+        // a new quiz, see quiz_service.py::get_due_questions/get_wrong_questions.
+        const targetId = quiz.submitQuizId ?? quiz.backendId ?? quiz.id;
+        const scopeIds = quiz.submitQuizId ? quiz.questions.map((q) => q.id) : undefined;
         try {
-          const res = await quizApi.submit(quiz.backendId ?? quiz.id, draft.answers);
+          const res = await quizApi.submit(targetId, draft.answers, undefined, scopeIds);
           backendResultId = res.id;
-        } catch { /* backend submit is best-effort */ }
+        } catch {
+          setError("Kết quả chỉ được lưu trên trình duyệt; chưa lưu được lên máy chủ.");
+        }
       }
       const id = quizzes.store.submit(draft.id, backendResultId);
       setAttemptId(id);
@@ -111,6 +125,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
       setConfirmSubmit(false);
       setWrongOnly(false);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -125,8 +140,9 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
         const apiQuiz = await quizApi.retryWrong(attempt.backendResultId);
         if (!apiQuiz.questions.length) throw new Error("Không có câu nào cần làm lại.");
         newQuizId = quizzes.store.create({
-          subjectId: quiz.subjectId, title: apiQuiz.title, difficulty: apiQuiz.difficulty,
-          source: "wrong", conversationId: null, questions: apiQuiz.questions, backendId: apiQuiz.backendId,
+          subjectId: quiz.subjectId, title: `Làm lại câu sai · ${apiQuiz.title}`, difficulty: apiQuiz.difficulty,
+          source: "wrong", conversationId: null, questions: apiQuiz.questions,
+          backendId: undefined, submitQuizId: apiQuiz.backendId,
         });
       } else if (result) {
         const wrongQuestions = result.items.filter((item) => !item.correct).map((item) => item.question);
@@ -153,7 +169,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
         <h3>{quiz.title}</h3>
         <div style={{ display: "flex", gap: 12 }}>
           {!taking ? <Button onClick={start}>{draft ? "Tiếp tục bài đang làm" : attempt ? "Làm lại" : "Bắt đầu làm bài"}</Button> : null}
-          {taking ? <Button variant="ghost" onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button> : null}
+          {taking ? <Button variant="ghost" disabled={submitting} onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button> : null}
         </div>
       </div>
 
@@ -165,7 +181,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
         <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
           <span className="meta" style={{ alignSelf: "center" }}>Các lần đã làm:</span>
           {pastAttempts.map((item) => {
-            const grade = gradeQuiz(quiz, item.answers);
+            const grade = gradeQuiz(quiz, item.answers, item.questionIds);
             const active = item.id === attemptId;
             return (
               <button
@@ -188,7 +204,18 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 20 }}>
             {quiz.questions.map((question, index) => (
               <fieldset key={question.id} style={{ margin: 0, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
-                <legend style={{ padding: 0, margin: 0, fontSize: 14, fontWeight: 600 }}>Câu {index + 1}{question.topic ? ` · ${question.topic}` : ""}</legend>
+                <legend style={{ padding: 0, margin: 0, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                  Câu {index + 1}
+                  {question.backendLastCorrect === false ? (
+                    <span className="pill" style={{ background: "var(--c-amber-soft, #fff3cd)", color: "var(--c-amber-ink, #92610a)", fontWeight: 500, fontSize: 12 }}>
+                      Mới trả lời sai — ôn lại ngay
+                    </span>
+                  ) : question.backendLastCorrect === true ? (
+                    <span className="pill" style={{ background: "var(--c-green-soft, #dcf5e1)", color: "var(--c-green-ink, #1a7a35)", fontWeight: 500, fontSize: 12 }}>
+                      Đã đúng — ôn lại cho nhớ lâu
+                    </span>
+                  ) : null}
+                </legend>
                 <p style={{ marginBottom: 16, whiteSpace: "pre-wrap" }}>{question.prompt}</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {question.options.map((option, optionIndex) => {
@@ -197,6 +224,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
                       <label key={optionIndex} className="option" style={{ cursor: "pointer", borderColor: chosen ? "var(--ink)" : "var(--border)" }}>
                         <input
                           type="radio"
+                          disabled={submitting}
                           name={`${draft.id}-${question.id}`}
                           checked={chosen}
                           onChange={() => quizzes.store.answer(draft.id, question.id, optionIndex)}

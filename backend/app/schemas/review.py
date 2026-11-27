@@ -1,16 +1,15 @@
 from pydantic import BaseModel
 from uuid import UUID
-from datetime import date
+from typing import List, Optional
 
 
-class ReviewDueQuestion(BaseModel):
-    question_id: UUID
-    question_text: str
-    options: str  # JSON array of choice strings (quiz_questions.options)
-    due_date: date
-    interval_days: int
+class DueQuizSummary(BaseModel):
+    quiz_id: UUID
+    title: str
+    subject_id: Optional[UUID] = None
+    due_count: int
 
 
-class ReviewDueResponse(BaseModel):
+class DueQuizzesResponse(BaseModel):
     total: int
-    questions: list
+    quizzes: List[DueQuizSummary]

@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuizzes } from "@/features/quiz/hooks/use-quizzes";
 import { useQuizOverlay } from "@/features/quiz/hooks/use-quiz-overlay";
 import { QuizOverlay } from "@/features/quiz/components/quiz-overlay";
+import { DueReviewDialog } from "@/features/reviews/components/due-review-dialog";
+import { useDueReviews } from "@/features/reviews/hooks/use-due-reviews";
 import { pageTitles } from "@/config/navigation";
 import type { UserProfile } from "@/features/auth/services/auth-api";
 
@@ -21,9 +24,20 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
   const chats = useConversations(user.id);
   const quizzes = useQuizzes(user.id);
   const overlay = useQuizOverlay(quizzes);
+  const dueReviews = useDueReviews();
   const workspace = useLearningWorkspace(chats.store.startNew);
 
   const pageTitle = workspace.selectedSubject?.name ?? pageTitles[workspace.activePage];
+
+  // `chats` is instantiated once here and never remounts, so its own list
+  // fetch only ever runs on first load (see use-conversations.ts::refresh) -
+  // a conversation created elsewhere on the backend meanwhile (e.g. Lộ
+  // trình "Học"'s own ask endpoint) wouldn't show up in "Chat gần đây"
+  // without re-fetching whenever the user actually opens the Tutor tab.
+  useEffect(() => {
+    if (workspace.activePage === "tutor") chats.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.activePage]);
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-background md:flex-row">
@@ -33,8 +47,14 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
         activePage={workspace.activePage}
         onNavigate={workspace.navigate}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <AppHeader title={pageTitle} onOpenReview={overlay.openReview} />
+      {/* `contain: layout` makes THIS div the containing block for any
+          `position: fixed` descendant (QuizOverlay, TopicLearnDialog - both
+          plain divs, not Radix Dialog portals) anywhere under it, however
+          deeply nested (SubjectDetail, path-tab.tsx, quiz-runner.tsx, ...) -
+          so they fill just this content column instead of the whole
+          viewport, keeping the sidebar always visible and clickable. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ contain: "layout" }}>
+        <AppHeader title={pageTitle} onOpenReview={overlay.openDueDialog} />
         {workspace.error ? (
           <div className="banner flex items-center justify-between gap-3" role="alert">
             <span className="flex-1">{workspace.error}</span>
@@ -63,7 +83,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               onNavigate={workspace.navigate}
               onOpenSubject={workspace.openSubject}
               onViewQuiz={overlay.open}
-              onOpenReview={overlay.openReview}
+              onOpenReview={overlay.openDueDialog}
               onOpenConversation={(id) => {
                 chats.store.select(id);
                 workspace.navigate("tutor", true);
@@ -107,6 +127,12 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
         autoStart={overlay.autoStart}
         onClose={overlay.close}
         onSwitchQuiz={overlay.switchTo}
+      />
+      <DueReviewDialog
+        open={overlay.dueDialogOpen}
+        quizzes={dueReviews.quizzes}
+        onClose={overlay.closeDueDialog}
+        onPick={overlay.startReview}
       />
     </div>
   );

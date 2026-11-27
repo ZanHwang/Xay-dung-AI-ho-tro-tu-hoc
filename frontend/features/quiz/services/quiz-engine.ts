@@ -1,7 +1,16 @@
 import type { Quiz, QuizAttempt, QuizQuestion, TopicMastery } from "../types";
 
-export function gradeQuiz(quiz: Quiz, answers: Record<string, number>) {
-  const items = quiz.questions.map((question) => ({ question, selected: answers[question.id], correct: answers[question.id] === question.correctIndex }));
+/**
+ * `questionIds`, when given, scopes grading to just that subset of
+ * `quiz.questions` instead of all of them - needed for an attempt synced
+ * from another device/session that only covered part of the quiz (a
+ * review/retry-wrong submission - see quiz-store.ts::mergeFromServer).
+ * An attempt made on THIS device never needs it: its `quiz` object is
+ * already scoped to just that subset (see types.ts::Quiz.submitQuizId).
+ */
+export function gradeQuiz(quiz: Quiz, answers: Record<string, number>, questionIds?: string[]) {
+  const scope = questionIds ? quiz.questions.filter((q) => questionIds.includes(q.id)) : quiz.questions;
+  const items = scope.map((question) => ({ question, selected: answers[question.id], correct: answers[question.id] === question.correctIndex }));
   const correct = items.filter((item) => item.correct).length;
   return { items, correct, total: items.length, percent: items.length ? Math.round(correct * 100 / items.length) : 0 };
 }
@@ -13,7 +22,7 @@ export function calculateMastery(quizzes: Quiz[], attempts: QuizAttempt[]): Topi
   for (const attempt of [...attempts].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))) {
     const quiz = quizMap.get(attempt.quizId);
     if (!quiz) continue;
-    for (const item of gradeQuiz(quiz, attempt.answers).items) {
+    for (const item of gradeQuiz(quiz, attempt.answers, attempt.questionIds).items) {
       const key = JSON.stringify([quiz.subjectId, item.question.topic]);
       const group = results.get(key) ?? { subjectId: quiz.subjectId, topic: item.question.topic, outcomes: [] };
       group.outcomes.push(item.correct);

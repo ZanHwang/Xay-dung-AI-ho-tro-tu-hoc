@@ -17,6 +17,10 @@ export type QuizQuestion = {
   // unrelated). null/undefined when the backend couldn't attribute one.
   // Used only to offer "Xem lại kiến thức" on a wrong answer.
   backendTopic?: string | null;
+  // Most recent spaced-repetition outcome for this question, when it has
+  // review history - null/undefined otherwise. Used to tag each question
+  // "mới sai" vs "đã đúng" while taking a due-questions session.
+  backendLastCorrect?: boolean | null;
 };
 
 export type Quiz = {
@@ -25,6 +29,15 @@ export type Quiz = {
   // (shared/ai/wrong/review). Needed so submitting actually persists the
   // result; local-only quizzes leave this undefined.
   backendId?: string;
+  // Set only for a temporary, LOCAL-only review/retry-wrong session (never
+  // persisted as its own backend Quiz - see use-quiz-overlay.ts::startReview
+  // and quiz-runner.tsx::retryWrong): the REAL backend quiz to submit this
+  // session's answers to (with `question_ids` scoped to just this session's
+  // questions - see quiz-runner.tsx::submit). Deliberately NOT reused as
+  // `backendId` so mergeFromServer never conflates this throwaway local
+  // object with the real quiz's own local entry (same backendId, two
+  // different local rows, would be ambiguous to match against).
+  submitQuizId?: string;
   subjectId: string;
   title: string;
   difficulty?: QuizDifficulty;
@@ -38,9 +51,11 @@ export type Quiz = {
   // a wrong answer open that exact document's lesson. null/undefined for
   // "Tổng hợp" or any quiz not tied to one document.
   documentId?: string | null;
-  // "review" = spaced-repetition quiz built from questions whose review date
-  // has come due (created via /quizzes/from-review). "weakness" is kept only
-  // so quiz-store.ts can still read old quizzes saved before "Chủ đề" was
+  // "review"/"wrong" = a temporary local session over a real quiz's due/
+  // wrong-answered questions (see submitQuizId above) - never its own
+  // backend Quiz, so these are filtered out of SubjectQuizSummary's "Danh
+  // sách Quiz" (subject-quiz-summary.tsx). "weakness" is kept only so
+  // quiz-store.ts can still read old quizzes saved before "Chủ đề" was
   // removed — nothing creates it anymore.
   source?: "sample" | "api" | "shared" | "weakness" | "wrong" | "review";
 };
@@ -48,7 +63,13 @@ export type Quiz = {
 export type QuizDraft = { id: string; quizId: string; startedAt: string; answers: Record<string, number> };
 // backendResultId: id of the backend QuizResult created when an "api" quiz
 // was submitted through the backend - needed for "retry wrong answers".
-export type QuizAttempt = QuizDraft & { submittedAt: string; backendResultId?: string };
+// questionIds: set only when synced from another device/session
+// (quiz-store.ts::mergeFromServer) for a partial (review/retry-wrong)
+// submission - the exact subset of quiz.questions this attempt covered, so
+// gradeQuiz() doesn't treat the quiz's OTHER questions as wrongly answered.
+// Never needed for an attempt made on this same device/session: its quiz
+// object is already scoped to just that subset (see submitQuizId above).
+export type QuizAttempt = QuizDraft & { submittedAt: string; backendResultId?: string; questionIds?: string[] };
 export type TopicMastery = { subjectId: string; topic: string; correct: number; total: number; percent: number | null };
 
 // =============================================================================
@@ -76,6 +97,7 @@ export interface ApiQuizQuestion {
   explanation?: string;
   topic?: string | null;
   created_at: string;
+  last_correct?: boolean | null;
 }
 
 export interface ApiQuizWithQuestions extends ApiQuiz {
@@ -95,6 +117,10 @@ export interface QuizAnswer {
 export interface QuizSubmit {
   answers: QuizAnswer[];
   time_spent?: number;
+  // Scopes this submission to exactly these question ids (review/retry-wrong
+  // session covering only part of the quiz) - omit for a normal full-quiz
+  // submission.
+  question_ids?: string[];
 }
 
 export interface QuizAnswerResponse {

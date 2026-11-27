@@ -26,7 +26,7 @@ from app.ai.figures import inspect_top_figure
 from app.ai.document_processor import page_texts, render_page_png, pdf_page_count
 from app.ai.vision import ocr_page
 from app.services.document_service import resolve_document_path
-from app.ai.orchestrator import MATH_RULE
+from app.ai.llm import MATH_RULE
 
 # Max pages per summarization request and max OCR calls per request.
 MAX_SUMMARY_PAGES = 30
@@ -190,11 +190,15 @@ class ReadingService:
             return summary_result
 
         # Over-retrieve so the context_pages post-filter still has material.
+        # score_threshold=0.5 only drops low-relevance padding from the same
+        # top-12 - can only return fewer chunks than before, never more, so
+        # this adds no extra retrieval cost or latency.
         results = await self.rag.search_documents(
             query=data.question,
             user_id=user.id,
             document_ids=[document_id],
             limit=12,
+            score_threshold=0.5,
         )
         if data.context_pages:
             results = filter_results_by_pages(

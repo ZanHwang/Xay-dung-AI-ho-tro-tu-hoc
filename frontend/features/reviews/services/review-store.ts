@@ -1,4 +1,4 @@
-import { reviewApi, type ReviewDueQuestion } from "./review-api";
+import { reviewApi, type DueQuizSummary } from "./review-api";
 
 // =============================================================================
 // Shared, in-memory cache for "câu đến hạn ôn" (split out of the removed
@@ -15,13 +15,8 @@ import { reviewApi, type ReviewDueQuestion } from "./review-api";
 // call reset() on logout.
 // =============================================================================
 
-type Snapshot = { due: ReviewDueQuestion[]; loaded: boolean };
-const INITIAL: Snapshot = { due: [], loaded: false };
-
-// Fetched once, generously sized - every consumer (header wants the full
-// count, dashboard wants a short preview) slices this same list to the
-// length it needs instead of each requesting its own limit from the API.
-const DUE_FETCH_LIMIT = 50;
+type Snapshot = { total: number; quizzes: DueQuizSummary[]; loaded: boolean };
+const INITIAL: Snapshot = { total: 0, quizzes: [], loaded: false };
 
 function createReviewStore() {
   let state: Snapshot = INITIAL;
@@ -34,8 +29,8 @@ function createReviewStore() {
   }
 
   async function fetchNow(): Promise<void> {
-    const result = await reviewApi.dueReviews(DUE_FETCH_LIMIT);
-    publish({ due: result.questions, loaded: true });
+    const result = await reviewApi.dueQuizzes();
+    publish({ total: result.total, quizzes: result.quizzes, loaded: true });
   }
 
   function triggerFetch(): Promise<void> {

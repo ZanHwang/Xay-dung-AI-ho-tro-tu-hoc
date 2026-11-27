@@ -29,6 +29,7 @@ export function mapQuizQuestion(api: ApiQuizQuestion): QuizQuestion {
     correctIndex: api.correct_answer,
     explanation: api.explanation?.trim() || "Tham khảo lại nội dung liên quan trong tài liệu.",
     backendTopic: api.topic ?? null,
+    backendLastCorrect: api.last_correct ?? null,
   };
 }
 
@@ -130,7 +131,8 @@ export const quizApi = {
   async submit(
     quizId: string,
     answers: Record<string, number>,
-    timeSpent?: number
+    timeSpent?: number,
+    questionIds?: string[]
   ): Promise<{
     id: string;
     quiz_id: string;
@@ -152,6 +154,7 @@ export const quizApi = {
         selected_answer,
       })),
       time_spent: timeSpent,
+      question_ids: questionIds,
     };
 
     const result: QuizResultResponse = await httpClient.post(
@@ -239,6 +242,20 @@ export const quizApi = {
   },
 
   /**
+   * Custom topics ("Chủ đề khác…") proven valid before - at least one
+   * AI-verified question already exists for them in this subject's shared
+   * bank (shared by subject NAME across users, same as the rest of the
+   * bank). Independent of Lộ trình, which needs topics tied to one specific
+   * document - this list is subject-wide and not tied to any document.
+   */
+  async getKnownTopics(subjectId: string): Promise<string[]> {
+    const response: { subject_id: string; topics: string[] } = await httpClient.get(
+      `/quizzes/known-topics/?subject_id=${encodeURIComponent(subjectId)}`
+    );
+    return response.topics ?? [];
+  },
+
+  /**
    * Delete a quiz on the backend (its questions/results cascade). Best-effort
    * callers should swallow failures — the quiz is already gone from the
    * local store either way.
@@ -248,29 +265,35 @@ export const quizApi = {
   },
 
   /**
+   * Rename a quiz on the backend - needed so anywhere that reads the title
+   * straight from there (due-review popup, a different device's sync) stays
+   * in sync, not just this browser's local store. Best-effort callers should
+   * swallow failures — the local rename already took effect either way.
+   */
+  async rename(id: string, title: string): Promise<void> {
+    await httpClient.patch(`/quizzes/${id}`, { title });
+  },
+
+  /**
    * Create a "retry wrong answers" quiz from a submitted backend result.
    */
+  /**
+   * Read-only: the questions failed in a past result, alongside their
+   * ORIGINAL quiz - no new quiz is created. Submit the answers back to
+   * `submit(quiz.backendId, answers, undefined, quiz.questions.map(q => q.id))`.
+   */
   async retryWrong(resultId: string): Promise<Quiz> {
-    const api: ApiQuizWithQuestions = await httpClient.post(`/quizzes/results/${resultId}/retry-wrong`, {});
+    const api: ApiQuizWithQuestions = await httpClient.get(`/quizzes/results/${resultId}/wrong-questions`);
     return mapQuiz(api, api.questions.map(mapQuizQuestion));
   },
 
   /**
-   * Create a spaced-repetition quiz from the questions whose review date has
-   * come due (correct -> 3 days, wrong -> 1 day after answering). 404 when
-   * nothing is due yet.
+   * Read-only: one quiz's own questions whose review date has come due (see
+   * backend QuizService.REVIEW_SCHEDULE) - no new quiz is created. 404 when
+   * nothing of it is due yet. Submit the same way as retryWrong above.
    */
-  async createFromReview(params: {
-    subject_id?: string;
-    num_questions?: number;
-    difficulty?: string;
-  }): Promise<Quiz> {
-    const payload = {
-      subject_id: params.subject_id ?? null,
-      num_questions: params.num_questions ?? 10,
-      difficulty: params.difficulty ?? "medium",
-    };
-    const api: ApiQuizWithQuestions = await httpClient.post("/quizzes/from-review", payload);
+  async dueQuestions(quizId: string): Promise<Quiz> {
+    const api: ApiQuizWithQuestions = await httpClient.get(`/quizzes/${quizId}/due-questions`);
     return mapQuiz(api, api.questions.map(mapQuizQuestion));
   },
 };

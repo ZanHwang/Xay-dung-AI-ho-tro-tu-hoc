@@ -22,9 +22,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
-
-
 @pytest.fixture(autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=engine)
@@ -34,7 +31,14 @@ def setup_database():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # Scoped to this fixture (not module level) so the override doesn't leak
+    # into other test files sharing the same `app` singleton within one
+    # pytest process.
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -155,7 +159,7 @@ def test_ask_happy_path(client, auth_headers, user_doc, monkeypatch):
 
     _, doc_id = user_doc
 
-    async def fake_search(self, query, user_id, document_ids=None, limit=5):
+    async def fake_search(self, query, user_id, document_ids=None, limit=5, score_threshold=None):
         return [
             {
                 "content": "[Trang 3] nội dung ABC của định lý.",
@@ -189,7 +193,7 @@ def test_ask_502_on_placeholder(client, auth_headers, user_doc, monkeypatch):
 
     _, doc_id = user_doc
 
-    async def fake_search(self, query, user_id, document_ids=None, limit=5):
+    async def fake_search(self, query, user_id, document_ids=None, limit=5, score_threshold=None):
         return [
             {
                 "content": "[Trang 3] nội dung.",

@@ -32,7 +32,13 @@ type TopicGroup = { documentId: string; documentName: string; topics: string[] }
  * (documentApi.list) each time the dialog opens, since a document can finish
  * processing (and get topics cached) while the user stays on the page.
  * "Chủ đề khác…" covers subjects/documents with no detected topics by
- * letting the user type one (not tied to any document).
+ * letting the user type one (not tied to any document). Any custom topic
+ * that AI successfully produces at least one question for becomes a quick
+ * pick next time (quizApi.getKnownTopics) - separate from Lộ trình, which
+ * only ever uses per-document topics. The SAME text box doubles as a live
+ * filter over those quick picks (no separate filter input) - still creates
+ * a brand new topic on "Tạo Quiz" if nothing is clicked and it's genuinely
+ * new/relevant to the subject.
  */
 export function QuizCreateDialog({ subject, quizzes, onCreated }: {
   subject: Subject;
@@ -55,6 +61,11 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
   // not a retry prompt.
   const [shortfall, setShortfall] = useState<{ id: string; actual: number; requested: number } | null>(null);
   const [groups, setGroups] = useState<TopicGroup[]>([]);
+  // Custom topics ("Chủ đề khác…") proven valid before for this subject
+  // (shared bank, see quizApi.getKnownTopics) - not tied to any document,
+  // so clicking one just sets `scope` directly like a document chip does,
+  // with scopeDocumentId left null.
+  const [knownTopics, setKnownTopics] = useState<string[]>([]);
   // Which document's own topic chips are currently shown below - purely a
   // "what to display" picker (not the final scope). Keeps many documents
   // from all dumping their chips on screen at once; a chip is still only
@@ -74,6 +85,11 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
     }).catch(() => {
       // Best-effort: keep showing whatever groups we already had.
     });
+    quizApi.getKnownTopics(subject.id).then((topics) => {
+      if (!cancelled) setKnownTopics(topics);
+    }).catch(() => {
+      // Best-effort: keep showing whatever we already had.
+    });
     return () => { cancelled = true; };
   }, [open, subject.id]);
 
@@ -88,6 +104,9 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
   }
 
   const pickedGroup = groups.find((g) => g.documentId === pickedDocumentId) ?? null;
+  const filteredKnownTopics = customTopic.trim()
+    ? knownTopics.filter((name) => name.toLowerCase().includes(customTopic.trim().toLowerCase()))
+    : knownTopics;
 
   async function handleCreate() {
     setCreating(true);
@@ -176,15 +195,40 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
             </div>
 
             {scope === CUSTOM_TOPIC ? (
-              <input
-                type="text"
-                className="input"
-                style={{ marginTop: 8 }}
-                value={customTopic}
-                disabled={creating}
-                onChange={(event) => setCustomTopic(event.target.value)}
-                placeholder="Ví dụ: Entropy, Hồi quy tuyến tính, Tokenization…"
-              />
+              <>
+                <input
+                  type="text"
+                  className="input"
+                  style={{ marginTop: 8 }}
+                  value={customTopic}
+                  disabled={creating}
+                  onChange={(event) => setCustomTopic(event.target.value)}
+                  placeholder="Ví dụ: Entropy, Hồi quy tuyến tính, Tokenization…"
+                />
+                {knownTopics.length > 0 ? (
+                  <div style={{ marginTop: 8 }}>
+                    <p className="meta">
+                      Chủ đề đã tạo được trước đây — bấm để chọn, hoặc cứ gõ tiếp ở trên nếu đây là chủ đề thực sự mới.
+                    </p>
+                    <div className="scroll-chips" style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {filteredKnownTopics.length === 0 ? (
+                        <p className="meta">Không có chủ đề nào khớp.</p>
+                      ) : filteredKnownTopics.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          disabled={creating}
+                          onClick={() => { setScope(name); setScopeDocumentId(null); setPickedDocumentId(""); }}
+                          className={scope === name && scopeDocumentId === null ? "pill pill-green" : "pill pill-grey"}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             {groups.length === 0 ? (

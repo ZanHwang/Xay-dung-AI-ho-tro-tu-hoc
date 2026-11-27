@@ -4,49 +4,11 @@ Moved out of the RAG orchestrator so the reading workspace (document-scoped
 Q&A) can reuse the exact same "look at the top figure-backed hit" flow.
 """
 import os
-import re
-import unicodedata
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from app.ai.vision import inspect_figure
 from app.config import settings
-
-# Keywords that mark a question is actually ABOUT a figure/chart/table
-# (as opposed to a random top-1 RAG result that happens to carry a figure).
-# Matched against the NORMALIZED (diacritic-stripped, lower-cased) question,
-# so we use NO-DIACRITIC spellings. Two families:
-#   * "hinh*"  : any word containing the token "hinh" -> hình, hình vẽ, ...
-#   * explicit no-diacritic spellings of common chart/table/number words.
-# The gate is intentionally broad: a false positive just costs one extra
-# vision call (still capped by the _is_irrelevant marker); a false negative
-# silently skips figure-backed answers, which is the bug we are fixing.
-# No-diacritic spellings of the figure/chart/table keywords. Matched against
-# the de-accented question (NFKD + strip combining marks), so "đồ thị" ->
-# "do thi", "hình vẽ" -> "hinh ve".
-_FIGURE_INTENT_RE = re.compile(
-    r"(?:"
-    r"hinh\w*|"
-    r"do thi|bieu do|do thi|solieu|solieu|bang|chart|figure|graph|diagram|"
-    r"matran|axis|truc|diem|thongke|sieu|doi|"
-    r"thongso|luong|tonghop"
-    r")",
-    re.IGNORECASE,
-)
-
-
-def _deaccent(s: str) -> str:
-    """Lower-case and strip Vietnamese diacritics (NFKD + drop combining marks)."""
-    import unicodedata
-    nfkd = unicodedata.normalize("NFKD", s.lower())
-    return "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
-
-def _question_mentions_figure(question: str) -> bool:
-    """Cheap pre-filter: does the user's question actually point at a figure?"""
-    if not question:
-        return False
-    norm = _deaccent(question)
-    return bool(_FIGURE_INTENT_RE.search(norm))
 
 
 async def inspect_top_figure(
@@ -56,20 +18,23 @@ async def inspect_top_figure(
 ) -> Optional[str]:
     """Look at the top figure-backed hit with the vision model.
 
-    Guardrails that keep the caller's answer from being polluted with an
+    No keyword gate on the question: RAG retrieval already decided these
+    chunks are relevant to the question, so if the best-matching one carries
+    a figure, that figure is worth looking at regardless of exact wording -
+    an earlier keyword-based gate here both missed valid cases (any phrasing
+    that didn't use the listed words) and false-triggered on common unrelated
+    words (de-accented substring matches like "bang" catching "bằng" (equals),
+    "diem" catching "điểm" (score/point), "doi" catching "đổi" (change)).
+
+    Guardrail that keeps the caller's answer from being polluted with an
     irrelevant figure section:
-      * The user's question must actually mention a figure/chart/table
-        (see _FIGURE_INTENT_RE) - otherwise we return None immediately and
-        skip the image call entirely (saves a vision API call + 0 stray text).
       * Only the FIRST figure-backed result is inspected (one image call
-        keeps query cost bounded).
+        keeps query cost bounded) - callers already retrieve in relevance
+        order, so this is the best-matching figure available.
       * If the vision model judges the figure irrelevant (replies with the
         marker), the analysis is dropped to None - so callers never prefix
         the answer with a stray "PHÂN TÍCH HÌNH" section.
     """
-    if not _question_mentions_figure(message):
-        return None
-
     for result in search_results:
         if not result.get("figure"):
             continue

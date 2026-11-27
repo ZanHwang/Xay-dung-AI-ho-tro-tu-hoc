@@ -48,3 +48,7 @@ class SubjectResponse(SubjectBase):
 class SubjectListResponse(BaseModel):
     total: int
     subjects: List[SubjectResponse]
+
+
+class SubjectNamesResponse(BaseModel):
+    names: List[str]

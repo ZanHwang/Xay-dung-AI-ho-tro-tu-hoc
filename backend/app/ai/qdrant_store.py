@@ -121,8 +121,14 @@ class QdrantStore:
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
         limit: int = 5,
+        score_threshold: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
-        """Find the most relevant chunks for a query within a user's docs."""
+        """Find the most relevant chunks for a query within a user's docs.
+
+        `score_threshold` (cosine similarity, same scale as the `score` this
+        returns) drops anything below it - use it when the caller wants
+        "however many are actually relevant" rather than a fixed top-N.
+        """
         await self.ensure_collection()
 
         vector = (await self.embedding.embed([query]))[0]
@@ -144,6 +150,7 @@ class QdrantStore:
             query=vector,
             query_filter=models.Filter(must=conditions),
             limit=limit,
+            score_threshold=score_threshold,
             with_payload=True,
         )
 
