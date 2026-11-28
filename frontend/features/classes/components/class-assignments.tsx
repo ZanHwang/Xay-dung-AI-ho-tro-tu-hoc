@@ -16,16 +16,16 @@ function errorText(error: unknown, fallback: string) {
 
 function AssignmentPreview({ assignment }: { assignment: Assignment }) {
   return (
-    <details className="rounded-xl border p-3" open>
-      <summary className="cursor-pointer text-sm font-semibold">
-        Đề thi · {assignment.question_count} câu · {formatPoints(assignment.max_total)} điểm
+    <details className="exam-paper" open>
+      <summary>
+        Đề thi, {assignment.question_count} câu, {formatPoints(assignment.max_total)} điểm
       </summary>
-      <div className="mt-3 divide-y">
+      <div>
         {assignment.questions.map((question) => (
-          <div key={question.id} className="space-y-2 py-3">
+          <div key={question.id} className="graded space-y-2 pb-3">
             <ExamQuestion question={question} />
             {"solution" in question ? (
-              <div className="rounded-lg bg-muted p-3 text-sm">
+              <div className="answer-key">
                 {question.correct_options.length ? (
                   <p><strong>Đáp án:</strong> {question.correct_options.join(", ")}</p>
                 ) : (
@@ -95,13 +95,15 @@ function StudentSubmission({
         <Button type="button" variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>Cập nhật kết quả</Button>
       ) : null}
       {error ? <p role="alert" className="error-box">{error}</p> : null}
-      <ExamResult result={result} />
+      <div className="exam-paper">
+        <ExamResult result={result} />
+      </div>
     </div>
   );
   if (submissionId) return error ? <p role="alert" className="error-box">{error}</p> : <p role="status" className="meta">Đang tải bài đã nộp…</p>;
   return (
     <form className="space-y-3" onSubmit={submit}>
-      <ExamFilePicker label="Bài làm của bạn" files={files} onChange={setFiles} disabled={busy} />
+      <ExamFilePicker label="Bài làm của bạn" tone="cover-violet" files={files} onChange={setFiles} disabled={busy} />
       <Button type="submit" disabled={!files.length || busy}><Sparkles /> {busy ? "Đang nhận diện và chấm…" : "Nộp bài để AI chấm"}</Button>
       {error ? <p role="alert" className="error-box">{error}</p> : null}
     </form>
@@ -150,18 +152,18 @@ function TeacherSubmissions({ classId, assignment }: { classId: string; assignme
   }
 
   return (
-    <div className="space-y-4 border-t pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-semibold">Bài nộp {submissions ? `(${submissions.length})` : ""}</h4>
+    <div className="space-y-3">
+      <div className="block-head">
+        <h4 className="mr-auto">Bài nộp {submissions ? `(${submissions.length})` : ""}</h4>
         <Button type="button" variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>Làm mới</Button>
       </div>
       {listError ? <p role="alert" className="error-box">{listError}</p> : null}
       {!submissions && !listError ? <p role="status" className="meta">Đang tải bài nộp…</p> : null}
       {submissions?.length === 0 ? <p className="meta">Chưa có học sinh nộp bài.</p> : null}
-      <ul className="space-y-2">
+      <ul className="work-list">
         {submissions?.map((submission) => (
           <li key={submission.id}>
-            <button type="button" className="list-row w-full text-left aria-pressed:bg-[var(--accent-soft)]"
+            <button type="button" className="work-row"
               aria-pressed={focusedId === submission.id}
               onClick={() => {
                 if (focusedId === submission.id) return;
@@ -170,8 +172,8 @@ function TeacherSubmissions({ classId, assignment }: { classId: string; assignme
                 setFocusedId(submission.id);
               }}
             >
-              <span className="min-w-0 grow">
-                <span className="title block">{submission.student_name}</span>
+              <span className="grow">
+                <span className="name">{submission.student_name}</span>
                 <span className="meta">
                   {submission.official_total !== null ? `Chính thức ${formatPoints(submission.official_total)} điểm` :
                     submission.ai_total !== null ? `AI ${formatPoints(submission.ai_total)} điểm` : "Chưa có điểm"}
@@ -185,10 +187,12 @@ function TeacherSubmissions({ classId, assignment }: { classId: string; assignme
       {detailError ? <p role="alert" className="error-box">{detailError}</p> : null}
       {focusedId && !result && !detailError ? <p role="status" className="meta">Đang tải bài làm…</p> : null}
       {result ? (
+        <div className="exam-paper">
         <TeacherExamReview
           key={`${result.id}:${result.revision}`} classId={classId} assignment={assignment} submission={result}
           onChange={updateResult} onRefresh={() => setRefresh((value) => value + 1)}
         />
+        </div>
       ) : null}
     </div>
   );
@@ -214,7 +218,7 @@ function AssignmentWorkspace({
   if (!assignment) return error ? <p role="alert" className="error-box">{error}</p> : <p role="status" className="meta">Đang tải đề thi…</p>;
   return (
     <div className="space-y-4">
-      <h4 className="text-lg font-semibold">{assignment.title}</h4>
+      <h3 className="block-title break-words">{assignment.title}</h3>
       <AssignmentPreview assignment={assignment} />
       {asTeacher ? <TeacherSubmissions classId={classId} assignment={assignment} /> :
         canSubmit ? (
@@ -245,14 +249,14 @@ export function ClassAssignments({
   const summary = assignments?.find((item) => item.id === selected);
 
   return (
-    <section className="card min-w-0 space-y-4 !mt-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2"><ClipboardList className="size-5" /> Đề đã giao</h3>
+    <section className="min-w-0 space-y-4">
+      <div className="block-head !mb-0">
+        <h3 className="block-title mr-auto">Đề đã giao</h3>
         {asTeacher && !creating && assignments ? <Button type="button" onClick={() => setCreating(true)}><Plus /> Tạo đề</Button> : null}
       </div>
       {error ? <p role="alert" className="error-box">{error}</p> : null}
       {!assignments && !error ? <p role="status" className="meta">Đang tải đề…</p> : null}
-      {assignments?.length === 0 && !creating ? <p className="meta">Lớp chưa có đề thi.</p> : null}
+      {assignments?.length === 0 && !creating ? <p className="empty">Lớp chưa có đề thi.</p> : null}
       {creating ? (
         <AssignmentEditor
           classId={classId} onCancel={() => setCreating(false)}
@@ -264,16 +268,17 @@ export function ClassAssignments({
         />
       ) : null}
       {assignments?.length ? (
-        <ul className="space-y-2">
+        <ul className="work-list">
           {assignments.map((item) => (
             <li key={item.id}>
               <button type="button" aria-pressed={selected === item.id}
                 onClick={() => { setSelected(item.id); setCreating(false); }}
-                className="list-row w-full text-left aria-pressed:bg-[var(--accent-soft)]"
+                className="work-row"
               >
-                <span className="min-w-0 grow">
-                  <span className="title block">{item.title}</span>
-                  <span className="meta">{item.question_count} câu · {formatPoints(item.max_total)} điểm</span>
+                <span className="file-ic cover-amber" aria-hidden="true"><ClipboardList className="size-5" /></span>
+                <span className="grow">
+                  <span className="name">{item.title}</span>
+                  <span className="meta">{item.question_count} câu, {formatPoints(item.max_total)} điểm</span>
                 </span>
                 {item.submission_id ? <span className="pill pill-green">Đã nộp</span> : null}
                 {item.submission_count !== null ? <span className="pill pill-grey">{item.submission_count} bài nộp</span> : null}

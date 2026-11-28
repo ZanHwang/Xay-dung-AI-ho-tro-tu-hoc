@@ -49,9 +49,9 @@ export function TeacherExamReview({
     <div className="space-y-5">
       <ExamResult result={submission} />
       {submission.official ? null : (
-        <form onSubmit={beforeFinalize} className="space-y-4 rounded-xl border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="font-semibold">Điểm chính thức</h4>
+        <form onSubmit={beforeFinalize} className="editor space-y-4">
+          <div className="block-head !mb-0">
+            <h4 className="mr-auto">Điểm chính thức</h4>
             <Button type="button" variant="outline" disabled={!!busy} onClick={() => void update("regrade")}>
               <RefreshCw className={busy === "regrade" ? "animate-spin" : undefined} />
               {busy === "regrade" ? "Đang chấm lại…" : "Yêu cầu AI chấm lại"}
@@ -60,18 +60,18 @@ export function TeacherExamReview({
           <fieldset disabled={!!busy} className="space-y-4">
             <div className="grid gap-2 sm:grid-cols-2">
               {assignment.questions.map((question) => (
-                <label key={question.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted p-2.5 text-sm">
-                  <span>Câu {question.id} · tối đa {formatPoints(question.max_points)}</span>
+                <label key={question.id} className="score-field">
+                  <span>Câu {question.id}, tối đa {formatPoints(question.max_points)} điểm</span>
                   <input
-                    type="number" className="input !w-24" required min="0" max={question.max_points} step="0.01"
+                    type="number" className="input" required min="0" max={question.max_points} step="0.01"
                     value={points[question.id] ?? ""} onChange={(event) => setPoints((prev) => ({ ...prev, [question.id]: event.target.value }))}
                   />
                 </label>
               ))}
             </div>
-            <label className="block text-sm font-medium">
+            <label className="lbl">
               Nhận xét cho học sinh
-              <textarea className="input mt-1" rows={3} value={comment} maxLength={8000}
+              <textarea className="input" rows={3} value={comment} maxLength={8000}
                 onChange={(event) => setComment(event.target.value)} />
             </label>
             <Button type="submit">{busy === "finalize" ? "Đang chốt…" : "Chốt điểm chính thức"}</Button>

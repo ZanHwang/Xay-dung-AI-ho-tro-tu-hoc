@@ -4,12 +4,19 @@ import { useEffect, useState } from "react";
 import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UserProfile } from "@/features/auth/services/auth-api";
+import { subjectAccent } from "@/features/subjects/types";
 import {
   classesApi,
   type ClassRoom,
   type PendingEssay,
 } from "../services/classes-api";
 import { ClassAssignments } from "../components/class-assignments";
+
+/** A class has no picked color: derive a stable notebook cover from its id
+ * (the same rule as a subject nobody picked a cover for). */
+function coverOf(room: ClassRoom) {
+  return `cover-${subjectAccent("#6366f1", room.id)}`;
+}
 
 export function ClassesPage({ profile }: { profile: UserProfile }) {
   const isTeacher = profile.role === "teacher";
@@ -66,94 +73,100 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
   }, []);
 
   return (
-    <div>
+    <div className="page class-page">
       <div className="view-head">
-        <div>
-          <p className="label" style={{ color: "var(--accent-strong)" }}>Lớp học</p>
-          <h2 className="mt-1">{isTeacher ? "Lớp của tôi" : "Lớp học"}</h2>
-          <p className="sub">Vào lớp bằng mã để xem đề thi, nộp bài và theo dõi điểm.</p>
-        </div>
+        <h1>{isTeacher ? "Lớp của tôi" : "Lớp học"}</h1>
+        <p>
+          {isTeacher
+            ? "Tạo lớp, gửi mã cho học sinh, giao đề rồi chấm và chốt điểm."
+            : "Vào lớp bằng mã để xem đề thi, nộp bài và theo dõi điểm."}
+        </p>
       </div>
 
       {message ? (
-        <div role="alert" className="banner banner-info" style={{ marginTop: 16 }}>{message}</div>
+        <div role="alert" className="banner">{message}</div>
       ) : null}
 
-      <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(245px,1fr)_minmax(0,1.85fr)]">
-        <div>
-          <section className="card">
-            <h3>Lớp của bạn</h3>
-            <div style={{ marginTop: 16 }}>
-              {rooms.length === 0 ? (
-                <div className="empty">
-                  <Users className="mx-auto mb-2 size-7" style={{ color: "var(--muted)" }} />
-                  <h3>Chưa có lớp nào</h3>
-                  <p>{isTeacher ? "Tạo lớp mới ở khung bên dưới để mời học sinh vào bằng mã lớp." : "Nhập mã lớp 6 ký tự giáo viên gửi để vào lớp."}</p>
-                </div>
-              ) : null}
-              <div className="scroll-list" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                {rooms.map((room) => (
-                  <button
-                    key={room.id}
-                    type="button"
-                    onClick={() => selectRoom(room)}
-                    className="list-row"
-                    style={{
-                      cursor: "pointer",
-                      border: selected?.id === room.id ? "1px solid var(--accent)" : "1px solid var(--border)",
-                      background: selected?.id === room.id ? "var(--accent-soft)" : "var(--surface-2)",
-                      fontFamily: "inherit",
-                      color: "inherit",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span className="grow">
-                      <span className="title block">{room.name}</span>
-                      <span className="sub2 block">{room.students} học sinh</span>
-                    </span>
-                    <span className="pill pill-grey" style={{ fontFamily: "monospace" }}>{room.code}</span>
-                  </button>
-                ))}
-              </div>
+      <div className="class-layout">
+        <div className="panel-stack">
+          {rooms.length === 0 ? (
+            <div className="empty">
+              <Users className="mb-2 size-7" aria-hidden="true" />
+              <h3>Chưa có lớp nào</h3>
+              <p className="!mb-0">{isTeacher ? "Tạo lớp mới ở khung bên dưới để mời học sinh vào bằng mã lớp." : "Nhập mã lớp 6 ký tự giáo viên gửi để vào lớp."}</p>
             </div>
+          ) : (
+            <ul className="class-list scroll-list" aria-label="Lớp của bạn">
+              {rooms.map((room) => (
+                <li key={room.id}>
+                  <button
+                    type="button"
+                    className={`class-row ${coverOf(room)}`}
+                    aria-current={selected?.id === room.id}
+                    onClick={() => selectRoom(room)}
+                  >
+                    <span className="spine-dot" aria-hidden="true" />
+                    <span className="grow">
+                      <span className="name">{room.name}</span>
+                      <span className="sub2">{room.students} học sinh</span>
+                    </span>
+                    <span className="class-code">{room.code}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <form className="panel" onSubmit={(event) => { event.preventDefault(); void join(); }}>
+            <label className="lbl" htmlFor="join-code">Vào lớp bằng mã</label>
+            <div className="join-row">
               <input
+                id="join-code"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="Mã lớp (6 ký tự)"
                 aria-label="Mã lớp"
-                className="input"
-                style={{ flex: 1, textTransform: "uppercase" }}
+                className="input uppercase placeholder:normal-case"
               />
-              <Button variant="outline" onClick={() => void join()}>Vào lớp</Button>
+              <Button type="submit" variant="outline">Vào lớp</Button>
             </div>
+          </form>
 
-            {isTeacher ? (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Tên lớp mới"
-                    aria-label="Tên lớp mới"
-                    className="input"
-                    style={{ flex: 1 }}
-                  />
-                  <Button onClick={() => void create()}><Plus /> Tạo lớp</Button>
-                </div>
+          {isTeacher ? (
+            <form className="panel" onSubmit={(event) => { event.preventDefault(); void create(); }}>
+              <label className="lbl" htmlFor="new-class">Tạo lớp mới</label>
+              <div className="join-row">
+                <input
+                  id="new-class"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Tên lớp mới"
+                  aria-label="Tên lớp mới"
+                  className="input"
+                />
+                <Button type="submit"><Plus /> Tạo lớp</Button>
               </div>
-            ) : null}
-          </section>
+            </form>
+          ) : null}
         </div>
 
         {selected ? (
-          <div className="min-w-0">
+          <div className="panel-stack">
+            <header className={`class-cover ${coverOf(selected)}`}>
+              <div className="nhan-vo">
+                <h2 className="name">{selected.name}</h2>
+                <p>{selected.students} học sinh</p>
+              </div>
+              <p className="code-card">
+                <span>Mã lớp</span>
+                <b>{selected.code}</b>
+              </p>
+            </header>
             <ClassAssignments
-              key={selected.id} classId={selected.id}
+              key={`assignments-${selected.id}`} classId={selected.id}
               asTeacher={isTeacher && selected.teacher_id === profile.id} canSubmit={profile.role === "student"}
             />
-            {isTeacher && selected.teacher_id === profile.id ? <PendingEssays key={selected.id} classId={selected.id} /> : null}
+            {isTeacher && selected.teacher_id === profile.id ? <PendingEssays key={`pending-${selected.id}`} classId={selected.id} /> : null}
           </div>
         ) : null}
       </div>
@@ -172,11 +185,11 @@ function PendingEssays({ classId }: { classId: string }) {
   }, [classId]);
   if (!pending.length) return null;
   return (
-    <details className="card">
-      <summary className="cursor-pointer font-semibold">Bài tự luận cũ chờ chấm ({pending.length})</summary>
-      <ul className="mt-3 space-y-2">
+    <details className="exam-paper">
+      <summary>Bài tự luận cũ chờ chấm ({pending.length})</summary>
+      <ul className="work-list mt-3">
         {pending.map((essay) => (
-          <li key={essay.id} className="rounded-lg bg-muted p-3">
+          <li key={essay.id} className="answer-key">
             <p className="title">{essay.student}</p><p className="sub2">{essay.essay}</p>
           </li>
         ))}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BookOpen } from "lucide-react";
 import { LearningWorkspace } from "@/features/workspace/components/learning-workspace";
 import { authApi, authErrorMessage, type UserProfile } from "../services/auth-api";
 import { reviewStore } from "@/features/reviews/services/review-store";
@@ -55,27 +56,22 @@ export function UserWorkspace() {
 
   if (loading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-card p-6 text-center">
-        <div>
-          <p role="status" className="text-sm text-muted-foreground">
-            Đang mở không gian học tập...
-          </p>
-        </div>
+      <main className="boot">
+        <span className="brand-mark" aria-hidden="true"><BookOpen className="size-4" /></span>
+        <p role="status">Đang mở không gian học tập...</p>
       </main>
     );
   }
 
   if (!user) {
     return (
-      <main className="grid min-h-screen place-items-center bg-card p-6 text-center">
-        <div>
-          <p role={error ? "alert" : "status"} className="err text-sm">
-            {error || "Không thể xác thực người dùng."}
-          </p>
-          <Link href="/login" className="mt-4 inline-block" style={{ color: "var(--accent-strong)", textDecoration: "underline" }}>
-            Về trang đăng nhập
-          </Link>
-        </div>
+      <main className="boot">
+        <p role={error ? "alert" : "status"} className="err">
+          {error || "Không thể xác thực người dùng."}
+        </p>
+        <Link href="/login" className="btn btn-outline">
+          Về trang đăng nhập
+        </Link>
       </main>
     );
   }

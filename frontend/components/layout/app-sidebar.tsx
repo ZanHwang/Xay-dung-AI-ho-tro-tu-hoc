@@ -14,7 +14,7 @@ type Props = {
   onNavigate: (page: NavKey) => void;
 };
 
-function initials(name: string) {
+export function initials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   return [words.length > 1 ? words[0] : "", words[words.length - 1] ?? ""]
     .map((word) => word.charAt(0))

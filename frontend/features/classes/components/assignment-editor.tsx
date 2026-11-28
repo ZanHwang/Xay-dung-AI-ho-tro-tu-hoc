@@ -64,27 +64,27 @@ export function AssignmentEditor({
   }
 
   return (
-    <form className="space-y-4 rounded-xl border p-4" onSubmit={submit}>
-      <h4 className="font-semibold">Tạo đề và barem</h4>
+    <form className="editor space-y-4" onSubmit={submit}>
+      <h3 className="block-title">Tạo đề và barem</h3>
       <fieldset disabled={busy} className="space-y-4">
-        <label className="block text-sm font-medium">
+        <label className="lbl">
           Tên đề
-          <input className="input mt-1" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} required />
+          <input className="input" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} required />
         </label>
         {questions.map((question, index) => (
-          <fieldset key={question.key} className="min-w-0 space-y-3 rounded-xl border p-3">
-            <legend className="px-1.5 text-sm font-semibold">Câu {index + 1}</legend>
+          <fieldset key={question.key} className="q-card space-y-3">
+            <legend className="q-head"><span className="q-num">Câu {index + 1}</span></legend>
             <div className="flex flex-wrap items-end gap-2">
-              <label className="grow text-sm font-medium">
+              <label className="lbl grow">
                 Loại câu
-                <select className="input mt-1" aria-label={`Loại câu ${index + 1}`} value={question.kind}
+                <select className="input" aria-label={`Loại câu ${index + 1}`} value={question.kind}
                   onChange={(event) => change(question.key, { kind: event.target.value as Draft["kind"] })}>
                   <option value="choice">Trắc nghiệm</option><option value="written">Tự luận</option>
                 </select>
               </label>
-              <label className="w-24 text-sm font-medium">
+              <label className="lbl w-28">
                 Điểm tối đa
-                <input className="input mt-1" aria-label={`Điểm tối đa câu ${index + 1}`} type="number" min="0.01" max="100" step="0.01" required
+                <input className="input" aria-label={`Điểm tối đa câu ${index + 1}`} type="number" min="0.01" max="100" step="0.01" required
                   value={question.points} onChange={(event) => change(question.key, { points: event.target.value })} />
               </label>
               <Button type="button" size="icon" variant="ghost" disabled={questions.length === 1}
@@ -92,27 +92,27 @@ export function AssignmentEditor({
                 aria-label={`Xóa câu ${index + 1}`}
               ><Trash2 /></Button>
             </div>
-            <label className="block text-sm font-medium">
+            <label className="lbl">
               Nội dung câu hỏi
-              <textarea className="input mt-1" aria-label={`Nội dung câu hỏi ${index + 1}`} rows={3} required value={question.prompt}
+              <textarea className="input" aria-label={`Nội dung câu hỏi ${index + 1}`} rows={3} required value={question.prompt}
                 onChange={(event) => change(question.key, { prompt: event.target.value })} />
             </label>
             {question.kind === "choice" ? (
               <>
-                <label className="block text-sm font-medium">
+                <label className="lbl">
                   Phương án theo thứ tự A, B, C…
-                  <textarea className="input mt-1" rows={3} required value={question.options}
+                  <textarea className="input" rows={3} required value={question.options}
                     placeholder="Mỗi dòng một phương án" onChange={(event) => change(question.key, { options: event.target.value })} />
                 </label>
-                <label className="block text-sm font-medium">
+                <label className="lbl">
                   Phương án đúng
-                  <input className="input mt-1 uppercase" required value={question.selection} placeholder="Ví dụ A hoặc A, C"
+                  <input className="input uppercase placeholder:normal-case" required value={question.selection} placeholder="Ví dụ A hoặc A, C"
                     onChange={(event) => change(question.key, { selection: event.target.value })} />
                 </label>
               </>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm font-medium">Barem từng tiêu chí</p>
+                <p className="lbl">Barem từng tiêu chí</p>
                 {question.rubric.map((criterion, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <input className="input min-w-0 flex-1" aria-label={`Tiêu chí ${i + 1}`} required
@@ -133,9 +133,9 @@ export function AssignmentEditor({
                 ><Plus /> Thêm tiêu chí</Button>
               </div>
             )}
-            <label className="block text-sm font-medium">
+            <label className="lbl">
               Lời giải tham khảo <span className="meta">Tuỳ chọn</span>
-              <textarea className="input mt-1" rows={2} value={question.solution}
+              <textarea className="input" rows={2} value={question.solution}
                 onChange={(event) => change(question.key, { solution: event.target.value })} />
             </label>
           </fieldset>
