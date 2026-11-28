@@ -1,4 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+/** Mounted layers, the one opened last (on top) at the end. */
+const layers: HTMLElement[] = [];
 
 /**
  * Ref for a layer that covers the page (quiz, lesson, reading view). While the
@@ -10,9 +13,17 @@ import { useCallback } from "react";
  * stays visible beside it also stays usable. Without such an ancestor the layer
  * covers the whole window and everything else is hidden.
  *
+ * Escape calls `onClose` for the top layer only, and not when a dialog or menu
+ * above it has already used the key.
+ *
  * The element needs `tabIndex={-1}`.
  */
-export function useModalLayer() {
+export function useModalLayer(onClose: () => void) {
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+
   return useCallback((layer: HTMLElement | null) => {
     if (!layer) return;
     const opener = document.activeElement as HTMLElement | null;
@@ -30,7 +41,17 @@ export function useModalLayer() {
       }
     }
     layer.focus({ preventScroll: true });
+    layers.push(layer);
+    const onKey = (event: KeyboardEvent) => {
+      // Radix dialogs and menus mark the event when Escape dismisses them.
+      if (event.key !== "Escape" || event.defaultPrevented || layers.at(-1) !== layer) return;
+      event.preventDefault();
+      close.current();
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
+      window.removeEventListener("keydown", onKey);
+      layers.splice(layers.indexOf(layer), 1);
       for (const element of hidden) element.inert = false;
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };

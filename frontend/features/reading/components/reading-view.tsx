@@ -64,7 +64,7 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
   const ready = status === "ready";
   // Phones stack the page above the chat; side by side leaves both unreadable.
   const narrow = useIsMobile();
-  const layerRef = useModalLayer();
+  const layerRef = useModalLayer(onClose);
 
   // ---- Poll document status until ready / failed --------------------------
   // The overlay is keyed per document in the parent, so this component
@@ -144,15 +144,6 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
     }),
     [numPages],
   );
-
-  // ---- Escape closes the overlay ------------------------------------------
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   return (
     <div className="overlay" ref={layerRef} tabIndex={-1}>

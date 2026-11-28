@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { X, ClipboardList } from "lucide-react";
 import type { Quiz } from "../types";
 import type { QuizController } from "../hooks/use-quizzes";
@@ -28,15 +27,7 @@ export function QuizOverlay({ quiz, quizzes, initialAttemptId, onClose, onSwitch
    * of showing the latest past attempt first. */
   autoStart?: boolean;
 }) {
-  const layerRef = useModalLayer();
-
-  // Escape closes the overlay (same convention as ReadingView).
-  useEffect(() => {
-    if (!quiz) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [quiz, onClose]);
+  const layerRef = useModalLayer(onClose);
 
   if (!quiz) return null;
 

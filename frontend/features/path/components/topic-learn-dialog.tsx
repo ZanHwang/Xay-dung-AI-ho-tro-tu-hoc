@@ -119,14 +119,7 @@ export function TopicLearnDialog({
   const [asking, setAsking] = useState(false);
 
   const [starting, setStarting] = useState(false);
-  const layerRef = useModalLayer();
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const layerRef = useModalLayer(onClose);
 
   useEffect(() => {
     if (!open || !topic || !documentId) return;
