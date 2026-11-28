@@ -18,7 +18,7 @@ export interface EssayGrade {
   total: number;
   max_total: number;
   overall: string;
-  mode: "llm" | "fallback";
+  mode: "llm" | "calculation" | "fallback";
   progress?: {
     xp: number;
     gems: number;

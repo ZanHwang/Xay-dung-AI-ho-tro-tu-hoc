@@ -14,7 +14,7 @@ export const navigationItems: NavigationItem[] = [
   { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { id: "subjects", label: "Môn học", icon: BookOpen },
   { id: "tutor", label: "AI Tutor", icon: Bot },
-  { id: "essay", label: "Tự luận", icon: PenLine },
+  { id: "essay", label: "Chấm bài", icon: PenLine },
   { id: "classes", label: "Lớp học", icon: Users },
   { id: "settings", label: "Hồ sơ", icon: User },
 ];
@@ -23,7 +23,7 @@ export const pageTitles: Record<NavKey, string> = {
   dashboard: "Tổng quan",
   subjects: "Môn học",
   tutor: "AI Tutor",
-  essay: "Tự luận",
+  essay: "Chấm bài",
   classes: "Lớp học",
   settings: "Hồ sơ",
 };

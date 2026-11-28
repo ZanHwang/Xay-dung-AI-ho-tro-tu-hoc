@@ -28,7 +28,7 @@ class EssayGradeOut(BaseModel):
     total: float
     max_total: float
     overall: str
-    mode: str  # llm | fallback
+    mode: str  # llm | calculation (older servers may return fallback)
 
 
 class EssayOut(BaseModel):

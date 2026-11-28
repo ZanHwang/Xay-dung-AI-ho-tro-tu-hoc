@@ -8,7 +8,7 @@ from app.database import engine, Base
 # Import routers here
 from app.routers import (
     auth, subjects, conversations, documents, quizzes, progress, reading,
-    path, essays, classes,
+    path, essays, classes, exams,
 )
 
 # Seed the shared question bank (idempotent - only inserts missing rows).
@@ -30,7 +30,10 @@ def _seed_shared_bank() -> None:
 # fresh database (e.g. a teammate's first run).
 def _startup_db_setup() -> None:
     try:
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(
+            bind=engine,
+            tables=[table for table in Base.metadata.sorted_tables if not table.info.get("explicit_install")],
+        )
         _seed_shared_bank()
     except Exception as exc:  # noqa: BLE001 - startup must stay alive
         import logging
@@ -114,6 +117,7 @@ app.include_router(progress.router, prefix="/api/progress", tags=["Progress"])
 app.include_router(reading.router, prefix="/api/reading", tags=["Reading"])
 app.include_router(essays.router, prefix="/api/essays", tags=["Essays"])
 app.include_router(classes.router, prefix="/api/classes", tags=["Classes"])
+app.include_router(exams.router, prefix="/api", tags=["Exam Grading"])
 
 
 if __name__ == "__main__":

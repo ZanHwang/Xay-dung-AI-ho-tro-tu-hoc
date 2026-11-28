@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PersonalExams } from "../components/personal-exams";
 import { essayApi, type EssayGrade } from "../services/essay-api";
 
 // Pre-filled with v2's sample so the form is usable out of the box; the
@@ -17,7 +19,32 @@ const SAMPLE_RUBRIC = [
 const SAMPLE_ESSAY =
   "Quang hợp là quá trình cây xanh dùng năng lượng ánh sáng để tổng hợp chất hữu cơ từ nước và khí cacbonic. Nhờ quang hợp, cây tạo ra oxi cho con người hít thở và tạo ra thức ăn cho các sinh vật khác. Nếu không có quang hợp, sự sống trên Trái Đất sẽ không duy trì được.";
 
+const gradeMethods: Record<EssayGrade["mode"], string> = {
+  calculation: "Đối chiếu kết quả phép tính",
+  llm: "Chấm bằng AI theo barem",
+  fallback: "Chấm tạm (chưa có LLM)",
+};
+
 export function EssayPage() {
+  return (
+    <div>
+      <div className="view-head">
+        <h2>Chấm bài thi</h2>
+        <p>Chấm trắc nghiệm và tự luận từ ảnh hoặc PDF, xem cách sửa từng câu.</p>
+      </div>
+      <Tabs defaultValue="files">
+        <TabsList className="mb-4">
+          <TabsTrigger value="files">Tải đề và bài làm</TabsTrigger>
+          <TabsTrigger value="typed">Tự luận nhập tay</TabsTrigger>
+        </TabsList>
+        <TabsContent value="files"><PersonalExams /></TabsContent>
+        <TabsContent value="typed"><TypedEssay /></TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function TypedEssay() {
   const [prompt, setPrompt] = useState(SAMPLE_PROMPT);
   const [rubric, setRubric] = useState(SAMPLE_RUBRIC);
   const [essay, setEssay] = useState(SAMPLE_ESSAY);
@@ -48,14 +75,6 @@ export function EssayPage() {
 
   return (
     <div>
-      <div className="view-head">
-        <div>
-          <p className="label" style={{ color: "var(--accent-strong)" }}>Tự luận theo barem</p>
-          <h2 className="mt-1">Chấm tự luận theo barem</h2>
-          <p className="sub">Nhập đề, barem của giáo viên và bài làm. AI chấm từng tiêu chí, trích đúng câu trong bài. Giáo viên chốt điểm cuối cùng.</p>
-        </div>
-      </div>
-
       <div style={{ marginTop: 24, display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
         <section className="card">
           <label className="field">
@@ -92,7 +111,7 @@ export function EssayPage() {
             <div className="empty" style={{ marginTop: 16 }}>
               <PenLine className="mx-auto mb-2 size-7" style={{ color: "var(--muted)" }} />
               <h3>Chưa chấm bài nào</h3>
-              <p>Nhập đề, barem và bài làm bên trái rồi bấm “Chấm bài này”. AI sẽ chấm từng tiêu chí riêng, trích đúng câu trong bài làm để giải thích điểm.</p>
+              <p>Nhập đề, barem và bài làm rồi bấm “Chấm bài này” để xem điểm và nhận xét theo từng tiêu chí.</p>
             </div>
           ) : (
             <div style={{ marginTop: 16 }}>
@@ -101,7 +120,7 @@ export function EssayPage() {
                   {result.total.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
                 </span>
                 <span className="meta">
-                  / {result.max_total} điểm · {result.mode === "llm" ? "Chấm bằng AI theo barem" : "Chấm tạm (chưa có LLM)"}
+                  / {result.max_total} điểm · {gradeMethods[result.mode]}
                 </span>
               </div>
               <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>

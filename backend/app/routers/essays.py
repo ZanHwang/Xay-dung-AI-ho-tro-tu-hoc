@@ -9,6 +9,7 @@ from app.schemas.essay import (
     EssayGradeIn, EssayGradeOut, EssayOut, EssayListOut,
 )
 from app.services.essay_service import EssayService
+from app.services.classes_service import ClassService
 from app.utils.security import get_current_user
 from app.models import User
 
@@ -25,8 +26,9 @@ async def grade_essay(
     current_user: User = Depends(get_current_user),
     service: EssayService = Depends(get_essay_service),
 ):
-    """Grade a single essay against a barem (AI, 60% fallback when the LLM
-    cannot produce valid JSON). +50 XP + streak touch (v2 rules)."""
+    """Grade a single typed essay against a rubric."""
+    if data.class_id is not None:
+        ClassService(service.db).require_member(data.class_id, current_user)
     return await service.grade_essay(
         user_id=current_user.id,
         subject_id=data.subject_id,
