@@ -8,6 +8,7 @@ import rehypeKatex from "rehype-katex";
 type MarkdownContentProps = {
   children: string;
   className?: string;
+  allowImages?: boolean;
 };
 
 // remark-math only recognizes $...$/$$...$$ - but the model (and OCR'd
@@ -23,7 +24,7 @@ function normalizeMathDelimiters(text: string): string {
     .replace(/\\\(([\s\S]*?)\\\)/g, (_match, expr: string) => `$${expr}$`);
 }
 
-export function MarkdownContent({ children, className }: MarkdownContentProps) {
+export function MarkdownContent({ children, className, allowImages = true }: MarkdownContentProps) {
   const components = useMemo(
     () =>
       ({
@@ -56,6 +57,7 @@ export function MarkdownContent({ children, className }: MarkdownContentProps) {
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        disallowedElements={allowImages ? undefined : ["img"]}
         components={components}
       >
         {normalized}

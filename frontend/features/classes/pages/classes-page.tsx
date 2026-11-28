@@ -9,12 +9,12 @@ import {
   type ClassRoom,
   type PendingEssay,
 } from "../services/classes-api";
+import { ClassAssignments } from "../components/class-assignments";
 
 export function ClassesPage({ profile }: { profile: UserProfile }) {
   const isTeacher = profile.role === "teacher";
   const [rooms, setRooms] = useState<ClassRoom[]>([]);
   const [selected, setSelected] = useState<ClassRoom | null>(null);
-  const [pending, setPending] = useState<PendingEssay[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [newName, setNewName] = useState("");
   const [message, setMessage] = useState("");
@@ -24,20 +24,14 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
       .list()
       .then((list) => {
         setRooms(list);
-        if (!selected && list.length > 0) void selectRoom(list[0]);
+        setSelected((room) => room ?? list[0] ?? null);
       })
       .catch((err) => setMessage(err instanceof Error ? err.message : "Không tải được lớp học."));
   }
 
-  async function selectRoom(room: ClassRoom) {
+  function selectRoom(room: ClassRoom) {
     setSelected(room);
     setMessage("");
-    try {
-      const p = await classesApi.pendingEssays(room.id);
-      setPending(p.essays);
-    } catch {
-      setPending([]);
-    }
   }
 
   async function join() {
@@ -46,7 +40,7 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
     try {
       const room = await classesApi.join(joinCode.trim());
       loadList();
-      await selectRoom(room);
+      selectRoom(room);
       setJoinCode("");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Không tìm thấy mã lớp.");
@@ -59,7 +53,7 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
     try {
       const room = await classesApi.create(newName.trim());
       loadList();
-      await selectRoom(room);
+      selectRoom(room);
       setNewName("");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Tạo lớp thất bại.");
@@ -69,7 +63,6 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
   // Load the list once; re-select the room whenever it changes.
   useEffect(() => {
     loadList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -78,7 +71,7 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
         <div>
           <p className="label" style={{ color: "var(--accent-strong)" }}>Lớp học</p>
           <h2 className="mt-1">{isTeacher ? "Lớp của tôi" : "Lớp học"}</h2>
-          <p className="sub">Vào lớp bằng mã và (với giáo viên) chấm hàng loạt bài tự luận theo barem.</p>
+          <p className="sub">Vào lớp bằng mã để xem đề thi, nộp bài và theo dõi điểm.</p>
         </div>
       </div>
 
@@ -86,7 +79,7 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
         <div role="alert" className="banner banner-info" style={{ marginTop: 16 }}>{message}</div>
       ) : null}
 
-      <div style={{ marginTop: 24, display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+      <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(245px,1fr)_minmax(0,1.85fr)]">
         <div>
           <section className="card">
             <h3>Lớp của bạn</h3>
@@ -103,7 +96,7 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
                   <button
                     key={room.id}
                     type="button"
-                    onClick={() => void selectRoom(room)}
+                    onClick={() => selectRoom(room)}
                     className="list-row"
                     style={{
                       cursor: "pointer",
@@ -154,29 +147,40 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
           </section>
         </div>
 
-        <div>
-          {isTeacher ? (
-            <section className="card">
-              <h3>Bài tự luận chờ chấm {selected ? `— ${selected.name}` : ""}</h3>
-              <p className="meta" style={{ marginTop: 4 }}>
-                {pending.length > 0
-                  ? `${pending.length} bài đang chờ. Chấm hàng loạt từ màn tự luận khi sẵn sàng.`
-                  : "Không có bài nào chờ chấm."}
-              </p>
-              <div className="scroll-list" style={{ marginTop: 16 }}>
-                {pending.map((e) => (
-                  <div key={e.id} className="list-row" style={{ background: "var(--surface-2)", border: 0, flexWrap: "wrap" }}>
-                    <div className="grow">
-                      <p className="title">{e.student}</p>
-                      <p className="sub2" style={{ marginTop: 4 }}>{e.essay}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </div>
+        {selected ? (
+          <div className="min-w-0">
+            <ClassAssignments
+              key={selected.id} classId={selected.id}
+              asTeacher={isTeacher && selected.teacher_id === profile.id} canSubmit={profile.role === "student"}
+            />
+            {isTeacher && selected.teacher_id === profile.id ? <PendingEssays key={selected.id} classId={selected.id} /> : null}
+          </div>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function PendingEssays({ classId }: { classId: string }) {
+  const [pending, setPending] = useState<PendingEssay[]>([]);
+  useEffect(() => {
+    let current = true;
+    classesApi.pendingEssays(classId).then((data) => {
+      if (current) setPending(data.essays);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [classId]);
+  if (!pending.length) return null;
+  return (
+    <details className="card">
+      <summary className="cursor-pointer font-semibold">Bài tự luận cũ chờ chấm ({pending.length})</summary>
+      <ul className="mt-3 space-y-2">
+        {pending.map((essay) => (
+          <li key={essay.id} className="rounded-lg bg-muted p-3">
+            <p className="title">{essay.student}</p><p className="sub2">{essay.essay}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

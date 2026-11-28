@@ -37,6 +37,7 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+/tsconfig.tuhoc-local.json
 /dist/
 /.wrangler/
 # Checkout-local execution profile and tool state; never publish them.

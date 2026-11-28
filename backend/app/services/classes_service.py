@@ -28,12 +28,29 @@ class ClassService:
 
     # -- guards -------------------------------------------------------------
 
-    def _require_teacher(self, user: User) -> None:
+    def require_teacher(self, user: User) -> None:
         if user.role != "teacher":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Chỉ giáo viên mới có thể thực hiện việc này",
             )
+
+    def require_owner(self, class_id: UUID, user: User) -> ClassRoom:
+        self.require_teacher(user)
+        room = self.db.get(ClassRoom, class_id)
+        if room is None or room.teacher_id != user.id:
+            raise HTTPException(404, "Không tìm thấy lớp của bạn.")
+        return room
+
+    def require_member(self, class_id: UUID, user: User) -> ClassRoom:
+        room = self.db.get(ClassRoom, class_id)
+        if room is None:
+            raise HTTPException(404, "Không tìm thấy lớp.")
+        if room.teacher_id != user.id:
+            enrolled = self.db.query(Enrollment.id).filter_by(class_id=class_id, user_id=user.id).first()
+            if enrolled is None:
+                raise HTTPException(404, "Không tìm thấy lớp.")
+        return room
 
     def _members(self, class_id: UUID) -> List[User]:
         return (
@@ -73,7 +90,7 @@ class ClassService:
         return [self._out(r) for r in rooms]
 
     def create_class(self, user: User, name: str) -> dict:
-        self._require_teacher(user)
+        self.require_teacher(user)
         name = (name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="Tên lớp không được trống")

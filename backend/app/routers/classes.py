@@ -59,9 +59,9 @@ def join_class(
 def class_members(
     class_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     service: ClassService = Depends(get_class_service),
 ):
+    service.require_owner(class_id, current_user)
     return service.members(class_id)
 
 
@@ -70,8 +70,10 @@ def pending_essays(
     class_id: UUID,
     current_user: User = Depends(get_current_user),
     service: EssayService = Depends(get_essay_service),
+    classes: ClassService = Depends(get_class_service),
 ):
     """Pending (ungraded) essays in a class, tagged with the student's name."""
+    classes.require_owner(class_id, current_user)
     rows = service.pending_for_class(class_id)
     return PendingListOut(total=len(rows), essays=[PendingEssayOut(**r) for r in rows])
 
@@ -81,8 +83,9 @@ async def grade_batch(
     class_id: UUID,
     data: BatchGradeIn,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     service: EssayService = Depends(get_essay_service),
+    classes: ClassService = Depends(get_class_service),
 ):
     """Teacher: grade every pending essay in a class with one prompt + barem."""
+    classes.require_owner(class_id, current_user)
     return await service.grade_batch(current_user.id, class_id, data.prompt, data.rubric)

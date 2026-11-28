@@ -2,19 +2,19 @@
 
 - `parse_rubric`: accept a list [{criterion, max}] or a multi-line string
   like "Ý 1 - 2đ\\nÝ 2 - 3đ".
-- `grade`: ask the LLM to score strictly against the barem; when the LLM
-  cannot produce valid JSON, fall back to 60% of each criterion's max
-  ("Chấm tạm 60%") so the flow never dead-ends.
+- `grade`: ask the LLM to score strictly against the barem.
 - Batch variant grades every pending essay in a class (teacher).
 """
 import json
+import math
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from app.models import Essay, Subject, User
+from app.services.essay_arithmetic import grade_calculation
 
 def parse_rubric(rubric: Any) -> List[dict]:
     """Accept list [{criterion, max}] or a string with one 'Ý - Nđ' per line."""
@@ -38,19 +38,14 @@ def parse_rubric(rubric: Any) -> List[dict]:
     return [{"criterion": "Nội dung", "max": 10.0}]
 
 
-def _fallback_scores(rubric: List[dict]) -> Tuple[List[dict], float, str, str]:
-    """60% of each criterion (v2 'Chấm tạm 60%' behaviour)."""
-    scores = []
-    for r in rubric:
-        scores.append({
-            "criterion": r["criterion"],
-            "score": round(r["max"] * 0.6, 1),
-            "max": r["max"],
-            "quote": "",
-            "feedback": "Chấm tạm (chưa chấm được bằng AI). Thử lại để chấm thật theo barem.",
-        })
-    total = sum(s["score"] for s in scores)
-    return scores, total, "Chấm tạm 60% — cần cấu hình LLM để chấm thật.", "fallback"
+def validated_rubric(rubric: Any) -> list[dict]:
+    try:
+        parsed = parse_rubric(rubric)
+        if all(math.isfinite(item["max"]) and item["max"] > 0 for item in parsed):
+            return parsed
+    except (TypeError, ValueError, OverflowError):
+        pass
+    raise HTTPException(422, "Điểm tối đa trong barem phải là số dương hợp lệ.")
 
 
 class EssayService:
@@ -61,30 +56,40 @@ class EssayService:
 
     async def _grade_one(self, prompt: str, rubric: List[dict], essay_text: str):
         """Return (scores, total, overall, mode) — shared by single + batch."""
+        calculation = grade_calculation(prompt, rubric, essay_text)
+        if calculation is not None:
+            score = calculation["score"]
+            overall = "Kết quả đúng." if score else "Kết quả chưa đúng."
+            return [calculation], score, overall, "calculation"
+
         from app.ai.llm import llm_manager
         parsed = await llm_manager.grade_essay(prompt, json.dumps(rubric, ensure_ascii=False), essay_text)
         if (
             isinstance(parsed, dict)
             and isinstance(parsed.get("scores"), list)
-            and parsed["scores"]
+            and len(parsed["scores"]) == len(rubric)
+            and all(isinstance(score, dict) for score in parsed["scores"])
         ):
             scores = []
             for s, r in zip(parsed["scores"], rubric):
-                raw_score = s.get("score", 0)
+                raw_score = s.get("score")
                 try:
                     score_val = float(raw_score)
-                except (TypeError, ValueError):
-                    score_val = 0.0
+                except (TypeError, ValueError, OverflowError):
+                    break
+                if not (0 <= score_val <= r["max"]):
+                    break
                 scores.append({
-                    "criterion": str(s.get("criterion", r["criterion"])),
-                    "score": min(score_val, r["max"]),
+                    "criterion": r["criterion"],
+                    "score": score_val,
                     "max": r["max"],
                     "quote": (str(s.get("quote") or ""))[:300],
                     "feedback": str(s.get("feedback") or ""),
                 })
-            total = sum(s["score"] for s in scores)
-            return scores, total, str(parsed.get("overall", "")).strip(), "llm"
-        return _fallback_scores(rubric)
+            if len(scores) == len(rubric):
+                total = round(sum(s["score"] for s in scores), 2)
+                return scores, total, str(parsed.get("overall", "")).strip(), "llm"
+        raise HTTPException(503, "AI chưa trả điểm hợp lệ. Hãy thử chấm lại.")
 
     # -- single-essay grade + store ----------------------------------------
 
@@ -108,7 +113,7 @@ class EssayService:
             if not subject:
                 raise HTTPException(status_code=404, detail="Không tìm thấy môn học")
 
-        parsed_rubric = parse_rubric(rubric)
+        parsed_rubric = validated_rubric(rubric)
         max_total = sum(r["max"] for r in parsed_rubric)
         scores, total, overall, mode = await self._grade_one(prompt, parsed_rubric, essay_text)
 
@@ -156,7 +161,7 @@ class EssayService:
         if not room:
             raise HTTPException(status_code=404, detail="Không tìm thấy lớp hoặc không phải lớp của bạn")
 
-        parsed_rubric = parse_rubric(rubric)
+        parsed_rubric = validated_rubric(rubric)
         max_total = sum(r["max"] for r in parsed_rubric)
 
         # The class's students (teacher auto-enrolls themselves; grade everyone
@@ -166,6 +171,7 @@ class EssayService:
             .join(Enrollment, Enrollment.user_id == Essay.user_id)
             .filter(
                 Enrollment.class_id == class_id,
+                Essay.class_id == class_id,
                 Essay.status == "pending",
             )
             .all()
@@ -203,7 +209,7 @@ class EssayService:
             self.db.query(Essay, User)
             .join(Enrollment, Enrollment.user_id == Essay.user_id)
             .join(User, User.id == Essay.user_id)
-            .filter(Enrollment.class_id == class_id, Essay.status == "pending")
+            .filter(Enrollment.class_id == class_id, Essay.class_id == class_id, Essay.status == "pending")
             .order_by(Essay.created_at.asc())
             .all()
         )

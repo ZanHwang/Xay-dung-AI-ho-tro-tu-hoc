@@ -37,22 +37,21 @@ export function isAuthenticated(): boolean {
   return getAuthToken() !== null;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function send(path: string, options: RequestOptions = {}): Promise<Response> {
   const token = getAuthToken();
+  const multipart = options.body instanceof FormData;
+  const headers = new Headers(options.headers);
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
+  if (!multipart && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: multipart ? (options.body as FormData) : JSON.stringify(options.body),
   });
 
   // Handle 401 - token expired or invalid
@@ -67,14 +66,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     let errorMessage = "Không thể xử lý yêu cầu.";
     try {
-      const errorData = (await response.json()) as { detail?: string; message?: string };
-      errorMessage = errorData.detail || errorData.message || errorMessage;
+      const errorData = (await response.json()) as {
+        detail?: string | { msg?: string }[];
+        message?: string;
+      };
+      const detail = typeof errorData.detail === "string" ? errorData.detail : errorData.detail?.[0]?.msg;
+      errorMessage = detail?.replace(/^Value error, /, "") || errorData.message || errorMessage;
     } catch {
       // Use default message
     }
     throw new ApiError(errorMessage, response.status);
   }
+  return response;
+}
 
+async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+  const response = await send(path, options);
   // Handle 204 No Content
   if (response.status === 204) {
     return {} as T;
@@ -85,6 +92,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export const httpClient = {
   get: <T>(path: string) => request<T>(path),
+  getBlob: async (path: string) => (await send(path)).blob(),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body }),
   put: <T>(path: string, body: unknown) =>
