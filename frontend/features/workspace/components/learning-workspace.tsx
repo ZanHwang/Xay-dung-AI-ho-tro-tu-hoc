@@ -57,7 +57,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
           deeply nested (SubjectDetail, path-tab.tsx, quiz-runner.tsx, ...) -
           so they fill just this content column instead of the whole
           viewport, keeping the sidebar always visible and clickable. */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ contain: "layout" }}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ contain: "layout" }} data-layer-root>
         {workspace.error ? (
           <div className="banner flex items-center justify-between gap-3" role="alert">
             <span className="flex-1">{workspace.error}</span>

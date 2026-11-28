@@ -30,6 +30,7 @@ import {
 } from "@/features/reading/services/reading-api";
 import { Spinner } from "@/components/ui/spinner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useModalLayer } from "@/hooks/use-modal-layer";
 
 const STATUS_LABEL: Record<DocumentStatus, string> = {
   uploading: "Đang tải lên…",
@@ -63,6 +64,7 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
   const ready = status === "ready";
   // Phones stack the page above the chat; side by side leaves both unreadable.
   const narrow = useIsMobile();
+  const layerRef = useModalLayer();
 
   // ---- Poll document status until ready / failed --------------------------
   // The overlay is keyed per document in the parent, so this component
@@ -153,7 +155,7 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
   }, [onClose]);
 
   return (
-    <div className="overlay">
+    <div className="overlay" ref={layerRef} tabIndex={-1}>
       {/* Header */}
       <div className="overlay-bar">
         <span className="file-ic" aria-hidden="true"><BookOpen className="size-5" /></span>

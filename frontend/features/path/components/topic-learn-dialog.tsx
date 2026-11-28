@@ -7,6 +7,7 @@ import type { QuizController } from "@/features/quiz/hooks/use-quizzes";
 import { pathApi, type TopicLesson, type TopicChatMessage, type TopicExcerpt } from "../services/path-api";
 import { MarkdownContent } from "@/features/tutor/components/markdown-content";
 import { downloadDocumentPage } from "@/features/subjects/services/document-api";
+import { useModalLayer } from "@/hooks/use-modal-layer";
 
 /**
  * RAG returns excerpts ordered by relevance to the topic (vector similarity),
@@ -118,6 +119,7 @@ export function TopicLearnDialog({
   const [asking, setAsking] = useState(false);
 
   const [starting, setStarting] = useState(false);
+  const layerRef = useModalLayer();
 
   useEffect(() => {
     if (!open) return;
@@ -186,7 +188,7 @@ export function TopicLearnDialog({
   const displayExcerpts = lesson ? orderExcerptsForDisplay(lesson.excerpts) : [];
 
   return (
-    <div className="overlay">
+    <div className="overlay" ref={layerRef} tabIndex={-1}>
       <div className="overlay-bar">
         <span className="file-ic" aria-hidden="true"><BookOpen className="size-5" /></span>
         <div>

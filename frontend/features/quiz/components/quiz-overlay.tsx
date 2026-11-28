@@ -5,6 +5,7 @@ import { X, ClipboardList } from "lucide-react";
 import type { Quiz } from "../types";
 import type { QuizController } from "../hooks/use-quizzes";
 import { QuizRunner } from "./quiz-runner";
+import { useModalLayer } from "@/hooks/use-modal-layer";
 
 /**
  * Opens one quiz (view result / retake / browse past submissions) full
@@ -27,6 +28,8 @@ export function QuizOverlay({ quiz, quizzes, initialAttemptId, onClose, onSwitch
    * of showing the latest past attempt first. */
   autoStart?: boolean;
 }) {
+  const layerRef = useModalLayer();
+
   // Escape closes the overlay (same convention as ReadingView).
   useEffect(() => {
     if (!quiz) return;
@@ -38,7 +41,7 @@ export function QuizOverlay({ quiz, quizzes, initialAttemptId, onClose, onSwitch
   if (!quiz) return null;
 
   return (
-    <div className="overlay">
+    <div className="overlay" ref={layerRef} tabIndex={-1}>
       <div className="overlay-bar">
         <span className="file-ic" aria-hidden="true"><ClipboardList className="size-5" /></span>
         <div>

@@ -119,11 +119,10 @@ export const authApi = {
   },
 
   /**
-   * Register a new user account
+   * Register a new user account. Does not sign in: the user logs in afterwards.
    */
   async register(input: RegisterRequest): Promise<UserProfile> {
-    // Register first
-    await httpClient.post<ApiUser>("/auth/register", {
+    const user = await httpClient.post<ApiUser>("/auth/register", {
       email: input.email,
       full_name: input.full_name,
       password: input.password,
@@ -131,8 +130,7 @@ export const authApi = {
       role: input.role ?? "student",
     });
 
-    // Auto-login after successful registration
-    return this.login(input.email, input.password);
+    return mapApiUserToProfile(user);
   },
 
   /**

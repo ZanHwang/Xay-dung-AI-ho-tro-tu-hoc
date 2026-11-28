@@ -699,6 +699,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 
 /* ---------- lớp phủ: làm quiz, học chủ đề, đọc tài liệu ---------- */
 .overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); }
+.overlay:focus { outline: none; }
 .overlay-bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 64px; padding: 8px 16px; background: var(--board); }
 .overlay-bar .file-ic { background: #fff; color: var(--accent-strong); }
 .overlay-bar > div { flex: 1; min-width: 0; }
