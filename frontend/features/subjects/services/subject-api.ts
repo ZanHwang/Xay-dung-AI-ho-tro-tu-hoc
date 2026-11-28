@@ -44,6 +44,8 @@ function mapApiSubject(api: ApiSubject): Subject {
       : "Chưa học",
     accent,
     currentTopic: undefined, // TODO: Get from user's current topic setting
+    documentCount: api.stats?.total_documents,
+    quizCount: api.stats?.total_quizzes,
   };
 }
 

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Ellipsis, Eye, Pencil, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,7 +92,7 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   return (
     <section aria-label="Quiz của môn">
       <div className="block-head">
-        <h3>Quiz đã tạo</h3>
+        <h2 className="block-title">Quiz đã tạo</h2>
         <QuizCreateDialog
           subject={subject}
           quizzes={quizzes}
@@ -121,30 +123,28 @@ export function SubjectQuizSummary({ subject, quizzes }: {
                     {quiz.questions.length} câu{latest ? `, làm ngày ${date}` : ""}
                   </span>
                 </span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                  <Button variant="outline" size="sm" onClick={() => openView(quiz, false)} aria-label={`Xem ${quiz.title}`}>
-                    Xem
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => openView(quiz, true)} aria-label={`${latest ? "Làm lại" : "Làm bài"} ${quiz.title}`}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <Button variant="outline" onClick={() => openView(quiz, true)} aria-label={`${latest ? "Làm lại" : "Làm bài"} ${quiz.title}`}>
                     {latest ? "Làm lại" : "Làm bài"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => { setActionError(""); setRenameValue(quiz.title); setRenaming(quiz); }}
-                    aria-label={`Đổi tên ${quiz.title}`}
-                  >
-                    Đổi tên
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setActionError(""); setDeleting(quiz); }}
-                    style={{ color: "var(--error)" }}
-                    aria-label={`Xóa ${quiz.title}`}
-                  >
-                    Xóa
-                  </Button>
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="more" aria-label={`Thao tác khác với ${quiz.title}`}>
+                        <Ellipsis className="size-5" aria-hidden="true" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="menu-panel" align="end">
+                      <DropdownMenuItem onSelect={() => openView(quiz, false)}>
+                        <Eye /> Xem
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => { setActionError(""); setRenameValue(quiz.title); setRenaming(quiz); }}>
+                        <Pencil /> Đổi tên
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onSelect={() => { setActionError(""); setDeleting(quiz); }}>
+                        <Trash2 /> Xóa
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             );

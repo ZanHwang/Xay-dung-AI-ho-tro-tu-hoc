@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { CreateSubjectDialog } from "@/features/subjects/components/create-subject-dialog";
 import { SubjectCard } from "@/features/subjects/components/subject-card";
-import { SubjectDetail } from "@/features/subjects/components/subject-detail";
+import { SubjectDetail, type SubjectTab } from "@/features/subjects/components/subject-detail";
 import type { QuizController } from "@/features/quiz/hooks/use-quizzes";
 import type {
   CreateSubjectInput,
@@ -13,6 +13,7 @@ type SubjectsPageProps = {
   quizzes: QuizController;
   subjects: Subject[];
   selectedSubject?: Subject;
+  initialTab?: SubjectTab;
   onOpen: (id: string) => void;
   onBack: () => void;
   onAskTutor: (id: string) => void;
@@ -24,6 +25,7 @@ type SubjectsPageProps = {
 export function SubjectsPage({
   subjects,
   selectedSubject,
+  initialTab,
   onOpen,
   onBack,
   onCreate,
@@ -36,6 +38,7 @@ export function SubjectsPage({
     return (
       <SubjectDetail
         subject={selectedSubject}
+        initialTab={initialTab}
         onBack={onBack}
         onAskTutor={onAskTutor}
         onUpdate={onUpdate}
@@ -52,7 +55,7 @@ export function SubjectsPage({
     <CreateSubjectDialog
       onCreate={onCreate}
       trigger={
-        <button type="button" className="cover-new oly">
+        <button type="button" className="cover-new">
           <Plus className="size-7" aria-hidden="true" />
           Tạo môn học
         </button>
@@ -63,7 +66,7 @@ export function SubjectsPage({
   return (
     <div className="page">
       <div className="view-head">
-        <h2>Môn học của tôi</h2>
+        <h1>Môn học</h1>
         <p>
           {subjects.length === 0
             ? "Chưa có môn nào. Tạo môn đầu tiên rồi thêm tài liệu để bắt đầu."

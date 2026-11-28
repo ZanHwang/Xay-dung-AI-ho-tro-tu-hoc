@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatFileSize, MAX_FILE_SIZE } from "../services/document-api";
 
@@ -19,17 +20,23 @@ export function DocumentPicker({ files, onChange, disabled }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="field">
-        Thêm tài liệu
-        {/* Native file inputs render their own "Choose Files / No file
-            chosen" text, which can't be relabeled — hide it and trigger it
-            from a plain button instead; the chosen files already list
-            below, so there's nothing the native status text would add. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => inputRef.current?.click()}>
+      <div>
+        <div className="drop-row">
+          <span className="file-ic cover-emerald" aria-hidden="true">
+            <Upload className="size-5" />
+          </span>
+          <div>
+            <b>Thêm tài liệu</b>
+            <p className="meta">
+              Chỉ nhận file PDF (Word, PowerPoint hãy xuất sang PDF trước), tối đa {MAX_FILE_SIZE / (1024 * 1024)}MB mỗi file.
+            </p>
+          </div>
+          {/* Native file inputs render their own "Choose Files / No file
+              chosen" text, which can't be relabeled — hide it and trigger it
+              from a plain button instead; the chosen files list below. */}
+          <Button type="button" variant="outline" disabled={disabled} onClick={() => inputRef.current?.click()}>
             Chọn file
           </Button>
-          <span className="meta">{files.length === 0 ? "Chưa chọn file nào" : `Đã chọn ${files.length} file`}</span>
         </div>
         <input
           ref={inputRef}
@@ -56,9 +63,6 @@ export function DocumentPicker({ files, onChange, disabled }: Props) {
           ))}
         </ul>
       ) : null}
-      <p className="meta">
-        Chỉ nhận PDF (Word/PowerPoint hãy xuất sang PDF trước) — tối đa {MAX_FILE_SIZE / (1024 * 1024)}MB mỗi file.
-      </p>
     </div>
   );
 }

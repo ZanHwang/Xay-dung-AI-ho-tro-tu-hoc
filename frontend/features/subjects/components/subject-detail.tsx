@@ -1,4 +1,4 @@
-import { ArrowLeft, MessageCircle, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Ellipsis, MessageCircle, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { accentToColor, type Subject, type SubjectAccent, type UpdateSubjectInput } from "@/features/subjects/types";
 import { CoverPicker } from "./cover-picker";
 import { SubjectDocuments } from "./subject-documents";
@@ -17,7 +18,11 @@ import { SubjectQuizSummary } from "@/features/quiz/components/subject-quiz-summ
 import type { QuizController } from "@/features/quiz/hooks/use-quizzes";
 import { PathTab } from "@/features/path/components/path-tab";
 
+export type SubjectTab = "documents" | "quiz" | "path";
+
 type SubjectDetailProps = {
+  /** Tab shown when the page opens (default: Tài liệu). */
+  initialTab?: SubjectTab;
   quizzes: QuizController;
   subject: Subject;
   onBack: () => void;
@@ -26,9 +31,7 @@ type SubjectDetailProps = {
   onDelete: (id: string) => Promise<void>;
 };
 
-type TabKey = "documents" | "quiz" | "path";
-
-const TABS: { key: TabKey; label: string }[] = [
+const TABS: { key: SubjectTab; label: string }[] = [
   { key: "documents", label: "Tài liệu" },
   { key: "path", label: "Lộ trình" },
   { key: "quiz", label: "Quiz" },
@@ -37,8 +40,8 @@ const TABS: { key: TabKey; label: string }[] = [
 // The subject's notebook cover heads the page; its index tabs switch between
 // Tài liệu | Lộ trình | Quiz. Each document row in SubjectDocuments has its own
 // "Đọc" button, so there is no separate reading tab.
-export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete, quizzes }: SubjectDetailProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("documents");
+export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete, quizzes, initialTab = "documents" }: SubjectDetailProps) {
+  const [activeTab, setActiveTab] = useState<SubjectTab>(initialTab);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editName, setEditName] = useState(subject.name);
@@ -82,44 +85,48 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
   return (
     <div className="page">
       <button type="button" onClick={onBack} className="link-btn mb-3 gap-2">
-        <ArrowLeft className="size-4" aria-hidden="true" /> Tất cả môn học
+        <ArrowLeft className="size-4" aria-hidden="true" /> Hôm nay
       </button>
 
       <div className={`subj-cover cover-${subject.accent}`}>
         <div className="subj-head">
           <div className="nhan-vo">
-            <h2 className="name">{subject.name}</h2>
+            <h1 className="name">{subject.name}</h1>
             {subject.description ? <p>{subject.description}</p> : null}
           </div>
           <div className="subj-actions">
-            <button type="button" className="cover-btn solid" onClick={() => onAskTutor(subject.id)}>
+            <button type="button" className="btn btn-accent" onClick={() => onAskTutor(subject.id)}>
               <MessageCircle className="size-4" aria-hidden="true" /> Hỏi AI về môn này
             </button>
-            <button
-              type="button"
-              className="cover-btn"
-              onClick={() => {
-                setEditName(subject.name);
-                setEditDescription(subject.description ?? "");
-                setEditCover(subject.accent);
-                setEditError("");
-                setEditing(true);
-              }}
-              aria-label={`Sửa môn học ${subject.name}`}
-            >
-              <Pencil className="size-4" aria-hidden="true" /> Sửa
-            </button>
-            <button
-              type="button"
-              className="cover-btn"
-              onClick={() => {
-                setEditError("");
-                setConfirmDelete(true);
-              }}
-              aria-label={`Xóa môn học ${subject.name}`}
-            >
-              <Trash2 className="size-4" aria-hidden="true" /> Xóa
-            </button>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="more" aria-label={`Sửa hoặc xóa môn ${subject.name}`}>
+                  <Ellipsis className="size-5" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="menu-panel" align="end">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setEditName(subject.name);
+                    setEditDescription(subject.description ?? "");
+                    setEditCover(subject.accent);
+                    setEditError("");
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil /> Sửa môn học
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => {
+                    setEditError("");
+                    setConfirmDelete(true);
+                  }}
+                >
+                  <Trash2 /> Xóa môn học
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

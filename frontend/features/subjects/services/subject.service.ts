@@ -18,7 +18,7 @@ const subjectSchema = z.object({
   progress: z.number().finite().min(0).max(100),
   lessons: z.number().int().nonnegative(),
   lastStudied: z.string(),
-  accent: z.enum(["cyan", "violet", "amber", "emerald"]),
+  accent: z.enum(["cyan", "violet", "amber", "emerald", "rose", "orange"]),
   currentTopic: z.string().optional(),
 }) satisfies z.ZodType<Subject>;
 

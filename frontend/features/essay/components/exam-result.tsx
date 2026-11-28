@@ -54,31 +54,29 @@ export function ExamResult({ result }: { result: Submission }) {
   const correctCount = analysis.grades.filter((grade) => Number(grade.points) === Number(grade.max_points)).length;
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-        <div className="space-y-1">
-          <h3>Kết quả chấm</h3>
-          {result.kind ? <span className="meta">{kinds[result.kind]}</span> : null}
+      <div className="total pb-1">
+        {result.ai_total !== null && !partial ? <span className="score-pen big">{formatPoints(result.ai_total)}</span> : null}
+        <div className="min-w-0 flex-1">
+          <h3>
+            {partial ? `${correctCount} / ${analysis.grades.length} câu đúng`
+              : result.ai_total === null ? "Chưa có điểm"
+              : result.max_total !== null ? `trên ${formatPoints(result.max_total)} điểm` : "điểm"}
+          </h3>
+          <p className="meta">
+            {partial ? "Kết quả các câu đã đối chiếu" : "Điểm AI đề xuất"}
+            {result.kind ? `, ${kinds[result.kind].toLowerCase()}` : ""}
+          </p>
+          {partial ? <p className="meta">Đang chờ xác minh điểm toàn bài.</p> : null}
         </div>
         <ExamStatus state={result.state} />
       </div>
 
-      <div className={official ? "grid gap-3 sm:grid-cols-2" : "grid"}>
-        <div className="rounded-xl bg-muted px-4 py-3">
-          <p className="meta">{partial ? "Kết quả các câu đã đối chiếu" : "Điểm AI đề xuất"}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">
-            {partial ? `${correctCount} / ${analysis.grades.length} câu đúng` :
-              result.ai_total !== null ? formatPoints(result.ai_total) : "Chưa có điểm"}
-            {result.max_total !== null ? <span className="meta ml-1">/ {formatPoints(result.max_total)}</span> : null}
-          </p>
-          {partial ? <p className="meta mt-1">Đang chờ xác minh điểm toàn bài.</p> : null}
+      {official ? (
+        <div className="rounded-xl bg-[var(--accent-soft)] px-4 py-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium"><CheckCircle2 className="size-4" /> Điểm chính thức</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{formatPoints(official.total)}</p>
         </div>
-        {official ? (
-          <div className="rounded-xl bg-[var(--accent-soft)] px-4 py-3">
-            <p className="flex items-center gap-1.5 text-sm font-medium"><CheckCircle2 className="size-4" /> Điểm chính thức</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{formatPoints(official.total)}</p>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
       {analysis.reason ? <p role="status" className="banner banner-info">{analysis.reason}</p> : null}
       {official?.comment ? (
         <div>
@@ -114,14 +112,14 @@ export function ExamResult({ result }: { result: Submission }) {
         const score = officialById.get(question.id);
         const review = reviewById.get(question.id);
         return (
-          <article key={question.id} className="space-y-3 rounded-xl border p-4">
+          <article key={question.id} className="graded space-y-3">
             <div className="flex flex-wrap justify-between gap-2">
               <ExamQuestion question={question} showPoints={!checkedOnly} />
               <div className="flex flex-wrap items-start gap-1.5">
-                {grade ? <span className="pill pill-blue">{partial
+                {grade ? <span className={`pill ${Number(grade.points) >= Number(grade.max_points) ? "pill-green" : Number(grade.points) > 0 ? "pill-amber" : "pill-red"}`}>{partial
                   ? (Number(grade.points) === Number(grade.max_points) ? "Đúng" : "Sai")
                   : `AI ${formatPoints(grade.points)} / ${formatPoints(grade.max_points)}`}</span> : null}
-                {score ? <span className="pill pill-green">Chính thức {formatPoints(score.points)} / {formatPoints(question.max_points)}</span> : null}
+                {score ? <span className="pill pill-blue">Chính thức {formatPoints(score.points)} / {formatPoints(question.max_points)}</span> : null}
                 {review ? <span className="pill pill-amber">Cần kiểm tra</span> : null}
               </div>
             </div>
@@ -148,7 +146,7 @@ export function ExamResult({ result }: { result: Submission }) {
                           <MarkdownContent allowImages={false}>{criterion.label}</MarkdownContent>
                           <span>{formatPoints(criterion.points)} / {formatPoints(criterion.max_points)}</span>
                         </div>
-                        {criterion.quote ? <blockquote className="meta border-l-2 pl-2">“{criterion.quote}”</blockquote> : null}
+                        {criterion.quote ? <blockquote className="quote"><span className="mark-hl">{criterion.quote}</span></blockquote> : null}
                         <MarkdownContent allowImages={false}>{criterion.feedback}</MarkdownContent>
                       </li>
                     ))}

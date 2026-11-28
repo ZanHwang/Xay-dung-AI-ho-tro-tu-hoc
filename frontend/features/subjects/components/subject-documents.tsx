@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, lazy, useEffect, useState } from "react";
-import { FileText, FileUp, Loader2, X } from "lucide-react";
+import { Download, Ellipsis, FileText, FileUp, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DocumentPicker } from "./document-picker";
 import { DocumentViewer } from "./document-viewer";
@@ -63,6 +64,20 @@ function statusLabel(status: DocumentStatus): string {
     default:
       return status;
   }
+}
+
+/** Cover color of the file icon, following the status. */
+function statusTone(status: DocumentStatus): string {
+  if (status === "ready") return "cover-emerald";
+  if (status === "failed") return "cover-rose";
+  if (status === "uploaded") return "cover-cyan";
+  return "cover-amber";
+}
+
+/** The reading view (with AI chat) only opens a usable PDF; anything else gets
+ * the plain viewer. */
+function opensInReadingView(document: ApiDocument): boolean {
+  return document.file_type?.toLowerCase() === "pdf" && document.status !== "failed";
 }
 
 function statusBadgeClass(status: DocumentStatus): string {
@@ -185,23 +200,25 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
 
   return (
     <section aria-label="Tài liệu môn học">
-      <div className="upload-box">
+      <div className="drop">
         <DocumentPicker files={files} onChange={setFiles} disabled={busy} />
-        <Button
-          className="mt-3"
-          disabled={busy || loading || !files.length}
-          onClick={() => void handleUpload()}
-        >
-          {busy ? (
-            <>
-              <Loader2 className="animate-spin" /> Đang tải lên...
-            </>
-          ) : (
-            <>
-              <FileUp /> Tải lên{files.length ? ` (${files.length})` : ""}
-            </>
-          )}
-        </Button>
+        {files.length > 0 || busy ? (
+          <Button
+            className="mt-3"
+            disabled={busy || loading || !files.length}
+            onClick={() => void handleUpload()}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="animate-spin" /> Đang tải lên...
+              </>
+            ) : (
+              <>
+                <FileUp /> Tải lên ({files.length})
+              </>
+            )}
+          </Button>
+        ) : null}
       </div>
 
       {uploads.length > 0 && (
@@ -253,17 +270,21 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
         </p>
       ) : null}
 
+      <div className="block-head" style={{ marginTop: 28 }}>
+        <h2 className="block-title">Tài liệu</h2>
+        <span className="sub">{loading ? "" : `${documents.length} file`}</span>
+      </div>
       {loading ? (
-        <p className="meta" style={{ marginTop: 20 }}>Đang tải tài liệu...</p>
+        <p className="meta">Đang tải tài liệu...</p>
       ) : documents.length === 0 ? (
-        <p className="meta" style={{ marginTop: 20 }}>
-          Chưa có tài liệu. Bạn có thể thêm giáo trình, slide hoặc bài tập tại đây.
-        </p>
+        <p className="empty">Chưa có tài liệu. Thêm giáo trình, slide hoặc bài tập ở ô phía trên.</p>
       ) : (
-        <div className="scroll-list" style={{ marginTop: 20 }}>
+        <div className="scroll-list">
           {documents.map((document) => (
             <div key={document.id} className="list-row wrap">
-              <FileText className="shrink-0" style={{ color: "var(--accent)" }} aria-hidden="true" />
+              <span className={`file-ic ${statusTone(document.status)}`} aria-hidden="true">
+                <FileText className="size-5" />
+              </span>
               <div className="grow">
                 <p className="title">{document.filename}</p>
                 <div className="meta" style={{ marginTop: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
@@ -272,67 +293,50 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
                   {document.file_type?.toLowerCase() !== "pdf" ? <span>{document.file_type?.toUpperCase() || "?"}</span> : null}
                 </div>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <Button
                   variant="outline"
-                  size="sm"
                   disabled={busy}
-                  onClick={() => setViewing(document)}
-                  aria-label={`Xem ${document.filename}`}
+                  onClick={() => (opensInReadingView(document) ? setReading(document) : setViewing(document))}
+                  aria-label={`Mở ${document.filename}`}
                 >
-                  Xem
+                  Mở
                 </Button>
-                {document.file_type?.toLowerCase() === "pdf" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy || document.status === "failed"}
-                    onClick={() => setReading(document)}
-                    aria-label={`Đọc ${document.filename}`}
-                  >
-                    Đọc
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    void perform(async () => {
-                      const blob = await downloadDocumentBlob(document.id);
-                      triggerBrowserDownload(document.filename, blob);
-                    })
-                  }
-                >
-                  Tải xuống
-                </Button>
-                {isStuckOrFailed(document) ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(async () => {
-                        const updated = await reprocessDocument(document.id);
-                        setDocuments((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-                        setNotice("Đã gửi yêu cầu xử lý lại — tải lại trang sau ít phút để xem trạng thái mới.");
-                      })
-                    }
-                    aria-label={`Xử lý lại ${document.filename}`}
-                  >
-                    Xử lý lại
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => setDeleting(document)}
-                  style={{ color: "var(--error)" }}
-                  aria-label={`Xóa ${document.filename}`}
-                >
-                  Xóa
-                </Button>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="more" disabled={busy} aria-label={`Thao tác khác với ${document.filename}`}>
+                      <Ellipsis className="size-5" aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="menu-panel" align="end">
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        void perform(async () => {
+                          const blob = await downloadDocumentBlob(document.id);
+                          triggerBrowserDownload(document.filename, blob);
+                        })
+                      }
+                    >
+                      <Download /> Tải xuống
+                    </DropdownMenuItem>
+                    {isStuckOrFailed(document) ? (
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          void perform(async () => {
+                            const updated = await reprocessDocument(document.id);
+                            setDocuments((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+                            setNotice("Đã gửi yêu cầu xử lý lại — tải lại trang sau ít phút để xem trạng thái mới.");
+                          })
+                        }
+                      >
+                        <RefreshCw /> Xử lý lại
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(document)}>
+                      <Trash2 /> Xóa
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}

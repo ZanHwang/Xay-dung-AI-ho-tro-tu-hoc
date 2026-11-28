@@ -1,8 +1,10 @@
 "use client";
 
-import { BookOpen, LogOut } from "lucide-react";
+import { BookOpen, ChevronUp, LogOut, User } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { navigationItems } from "@/config/navigation";
 import type { UserProfile } from "@/features/auth/services/auth-api";
+import { useDueReviews } from "@/features/reviews/hooks/use-due-reviews";
 import type { NavKey } from "@/features/workspace/types";
 
 type Props = {
@@ -12,56 +14,83 @@ type Props = {
   onNavigate: (page: NavKey) => void;
 };
 
-// The notebook cover: nav items are index tabs, the open one is a sheet of
-// paper joined to the page. On mobile the parent layout turns the column into a
-// top strip, so the nav renders as a horizontal strip <md and a list at md+.
+function initials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return [words.length > 1 ? words[0] : "", words[words.length - 1] ?? ""]
+    .map((word) => word.charAt(0))
+    .join("")
+    .toUpperCase();
+}
+
+// On mobile the parent layout turns the column into a top strip: brand and name
+// button first, then the nav as a horizontal row.
 export function AppSidebar({ user, onLogout, activePage, onNavigate }: Props) {
+  // The due-review count stays visible on every page, next to "Hôm nay" where
+  // the review button is.
+  const { total: dueTotal } = useDueReviews();
+  const current = activePage === "subjects" ? "dashboard" : activePage;
+
+  const profileMenu = (compact: boolean) => (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="who" style={compact ? { width: "auto", minHeight: 44, padding: 4 } : undefined} aria-label={`Tài khoản ${user.name}`}>
+          <span className="avatar-dot" aria-hidden="true">{initials(user.name)}</span>
+          {compact ? null : (
+            <>
+              <span className="min-w-0 flex-1 truncate">{user.name}</span>
+              <ChevronUp className="size-4" aria-hidden="true" />
+            </>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="menu-panel" side={compact ? "bottom" : "top"} align={compact ? "end" : "start"}>
+        <DropdownMenuItem onSelect={() => onNavigate("settings")}>
+          <User /> Hồ sơ
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onLogout}>
+          <LogOut /> Đăng xuất
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <aside className="board flex shrink-0 flex-col md:h-full md:w-60">
-      <div className="flex items-center justify-between gap-3 py-3 pl-5 pr-3 md:block md:py-5">
+      <div className="flex items-center justify-between gap-3 py-3 pl-5 pr-3 md:py-5">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             <BookOpen className="size-4" />
           </span>
           <span>TuHoc</span>
         </div>
-        <div className="flex min-w-0 items-center gap-2 md:hidden">
-          <p className="truncate text-sm">{user.name}</p>
-          <button type="button" onClick={onLogout} className="nav-item" style={{ width: "auto" }} aria-label="Đăng xuất">
-            <LogOut className="size-5" aria-hidden="true" />
-          </button>
-        </div>
-        <p className="mt-2 hidden truncate md:block">{user.name}</p>
+        <div className="md:hidden">{profileMenu(true)}</div>
       </div>
 
-      <nav className="overflow-x-auto px-3 md:flex-1 md:overflow-y-auto md:pr-0">
+      <nav aria-label="Điều hướng chính" className="overflow-x-auto px-3 pb-2 md:flex-1 md:overflow-y-auto">
         <ul className="flex gap-1 md:flex-col" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {navigationItems.map((item) => (
             <li key={item.id} className="shrink-0">
               <button
                 type="button"
                 onClick={() => onNavigate(item.id)}
-                aria-current={activePage === item.id ? "page" : undefined}
-                className={`nav-item ${activePage === item.id ? "active" : ""}`}
+                aria-current={current === item.id ? "page" : undefined}
+                className={`nav-item ${current === item.id ? "active" : ""}`}
               >
-                <span className="ic" aria-hidden="true">
-                  <item.icon className="size-5" />
-                </span>
+                <item.icon className="size-5" aria-hidden="true" />
                 {item.label}
+                {item.id === "dashboard" && dueTotal > 0 ? (
+                  <span className="nav-badge" title={`${dueTotal} câu cần ôn`}>
+                    {dueTotal}
+                    <span className="sr-only"> câu cần ôn</span>
+                  </span>
+                ) : null}
               </button>
             </li>
           ))}
         </ul>
       </nav>
 
-      <div className="hidden px-3 pb-3 md:block">
-        <button type="button" onClick={onLogout} className="nav-item">
-          <span className="ic" aria-hidden="true">
-            <LogOut className="size-5" />
-          </span>
-          Đăng xuất
-        </button>
-      </div>
+      <div className="hidden px-3 pb-3 md:block">{profileMenu(false)}</div>
     </aside>
   );
 }

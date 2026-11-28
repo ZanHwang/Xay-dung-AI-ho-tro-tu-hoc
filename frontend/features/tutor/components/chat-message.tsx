@@ -1,4 +1,3 @@
-import { Bot } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ChatImageView } from "./chat-image";
 import { ChatDocument } from "./chat-document";
@@ -52,11 +51,6 @@ export function ChatMessage({ message, onJumpToPage }: ChatMessageProps) {
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser ? (
-        <span className="bot-avatar grid size-9 shrink-0 place-items-center rounded-xl">
-          <Bot className="size-4" />
-        </span>
-      ) : null}
       <div className={isUser ? "bubble bubble-user" : "bubble bubble-bot"}>
         {!!message.images?.length && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -76,29 +70,31 @@ export function ChatMessage({ message, onJumpToPage }: ChatMessageProps) {
           <div className="bubble-src">
             {message.sources?.length ? (
               <>
-                <p>
-                  <strong>Nguồn:</strong>{" "}
+                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span>Nguồn:</span>
                   {message.sources.slice(0, 3).map((source, index) => (
-                    <span key={source.chunk_id ?? index}>
-                      {index > 0 && " · "}
-                      <span>{source.document_name || "Tài liệu"}</span>
+                    <span key={source.chunk_id ?? index} className="mark-hl">
+                      {source.document_name || "Tài liệu"}
                       {source.page ? (
                         onJumpToPage ? (
-                          <button
-                            type="button"
-                            onClick={() => onJumpToPage(Number(source.page))}
-                            className="jump-link ml-1"
-                            aria-label={`Nhảy tới trang ${source.page}`}
-                          >
-                            (trang {source.page})
-                          </button>
+                          <>
+                            ,{" "}
+                            <button
+                              type="button"
+                              onClick={() => onJumpToPage(Number(source.page))}
+                              className="jump-link"
+                              aria-label={`Nhảy tới trang ${source.page}`}
+                            >
+                              trang {source.page}
+                            </button>
+                          </>
                         ) : (
-                          <span> (trang {source.page})</span>
+                          <>, trang {source.page}</>
                         )
                       ) : null}
                     </span>
                   ))}
-                  {message.sources.length > 3 ? ` (+${message.sources.length - 3})` : ""}
+                  {message.sources.length > 3 ? <span>và {message.sources.length - 3} nguồn khác</span> : null}
                 </p>
                 {message.sources.slice(0, 3).filter((source) => source.figure && source.document_id).map((source) => (
                   <FigureThumb key={source.chunk_id ?? source.figure} source={source} />
@@ -112,7 +108,7 @@ export function ChatMessage({ message, onJumpToPage }: ChatMessageProps) {
           </div>
         ) : null}
 
-        <p className="bubble-ts mt-2 text-[11px]">{message.timestamp}</p>
+        <p className="bubble-ts mt-1 text-xs">{message.timestamp}</p>
       </div>
     </div>
   );

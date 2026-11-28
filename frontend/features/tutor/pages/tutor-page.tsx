@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Plus, FileText, Pencil, Trash2, ClipboardCheck } from "lucide-react";
+import { Ellipsis, Plus, FileText, Pencil, Trash2, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Subject } from "@/features/subjects/types";
 import { ChatMessage } from "@/features/tutor/components/chat-message";
 import type { ConversationsController } from "../hooks/use-conversations";
@@ -15,12 +16,6 @@ import { formatFileSize } from "@/features/subjects/services/document.service";
 
 type Props = { subjects: Subject[]; chats: ConversationsController; isVisible: boolean; onCreateQuiz: (subjectId: string | null, conversationId: string | null) => void };
 type Editor = { id: string; title: string };
-
-// v2 accent for the selected/active conversation rows.
-const selectedRowStyle = {
-  background: "var(--accent-soft)",
-  color: "var(--accent-strong)",
-};
 
 export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -39,6 +34,11 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
   const subjectName = (id: string | null) => id === null ? "Hỏi đáp chung"
     : subjects.find((subject) => subject.id === id)?.name ?? "Môn học không còn tồn tại";
   const conversations = [...chats.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const coverClass = (id: string | null | undefined) => {
+    const accent = subjects.find((subject) => subject.id === id)?.accent;
+    return accent ? `cover-${accent}` : "";
+  };
+  const activeSubjectId = active ? active.subjectId : chats.draftSubjectId;
 
   function openConversation(id: string) {
     chats.store.select(id);
@@ -74,22 +74,7 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="view-head row-between">
-        <div>
-          <h2 className="mt-1">Trợ giảng cá nhân</h2>
-          <p className="sub">
-            {draftSubject && !active ? `Đặt câu hỏi về môn ${draftSubject.name}.` : "Hỏi ngay để bắt đầu. TuHoc sẽ đặt tên và nhận diện môn học từ câu hỏi đầu tiên."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={!chats.ready} onClick={() => onCreateQuiz(active ? active.subjectId : chats.draftSubjectId, active?.id ?? null)}>
-            <ClipboardCheck /> Tạo Quiz
-          </Button>
-          <Button disabled={!chats.ready} onClick={() => chats.store.startNew()}>
-            <Plus /> Hội thoại mới
-          </Button>
-        </div>
-      </div>
+      <h1 className="sr-only">Hỏi AI</h1>
 
       {chats.storageError && (
         <div role="alert" className="banner" style={{ marginBottom: 16 }}>
@@ -99,50 +84,57 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
 
       <div className="chat-layout min-h-0 flex-1">
         <aside className="chat-side" aria-label="Lịch sử hội thoại">
-          <p className="label">Cuộc hội thoại ({conversations.length})</p>
-          {!chats.ready ? <p className="meta" style={{ marginTop: 12 }}>Đang tải lịch sử...</p> : conversations.length === 0 ? <p className="meta" style={{ marginTop: 12 }}>Chưa có cuộc hội thoại.</p> : null}
-          <div style={{ marginTop: 12 }}>
-            {conversations.map((conversation) => (
-              <button
-                type="button"
-                key={conversation.id}
-                aria-current={active?.id === conversation.id ? "true" : undefined}
-                onClick={() => openConversation(conversation.id)}
-                className="conv-row"
-                style={active?.id === conversation.id ? selectedRowStyle : undefined}
-              >
-                <span className="grow title">{conversation.title}</span>
-                <span className="sub2 block">{displayCount(conversation)} tin nhắn{chats.pending.includes(conversation.id) ? " · Đang trả lời" : ""}</span>
-              </button>
-            ))}
-          </div>
-          <p className="meta" style={{ marginTop: 20 }}>
-            Lịch sử được lưu trên trình duyệt này. Tài liệu và tiến độ thuộc môn học, độc lập với cuộc hội thoại.
-          </p>
+          <button type="button" className="btn btn-accent" disabled={!chats.ready} onClick={() => chats.store.startNew()}>
+            <Plus className="size-5" aria-hidden="true" /> Hội thoại mới
+          </button>
+          {!chats.ready ? <p className="meta">Đang tải lịch sử...</p> : conversations.length === 0 ? <p className="meta">Chưa có cuộc hội thoại.</p> : null}
+          {conversations.map((conversation) => (
+            <button
+              type="button"
+              key={conversation.id}
+              aria-current={active?.id === conversation.id ? "true" : undefined}
+              onClick={() => openConversation(conversation.id)}
+              className="conv-row"
+            >
+              <span className={`spine-dot ${coverClass(conversation.subjectId)}`} aria-hidden="true" />
+              <span className="grow">
+                <span className="title">{conversation.title}</span>
+                <span className="sub2">
+                  {displayCount(conversation)} tin nhắn{chats.pending.includes(conversation.id) ? ", đang trả lời" : ""}
+                </span>
+              </span>
+            </button>
+          ))}
         </aside>
 
         <section className="min-w-0 chat-main" aria-label="Nội dung hội thoại">
-          <div className="row-between shrink-0" style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
-                <Bot className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate">{active?.title ?? "Cuộc hội thoại mới"}</h3>
-                <p className="meta" style={{ marginTop: 2 }}>
-                  {active ? (active.subjectId ? `Môn học: ${subjectName(active.subjectId)}` : "Hỏi đáp chung") : (draftSubject ? `Môn học: ${draftSubject.name}` : "Tự nhận diện môn học từ câu hỏi đầu tiên")}
-                </p>
-              </div>
+          <div className="talk-head">
+            <div>
+              <h2 className="truncate">{active?.title ?? "Cuộc hội thoại mới"}</h2>
+              {!active && !draftSubject ? <p className="meta">Tự nhận diện môn học từ câu hỏi đầu tiên</p> : null}
             </div>
+            {activeSubjectId || active ? (
+              <span className={`pill subject-pill ${coverClass(activeSubjectId)}`}>{subjectName(activeSubjectId ?? null)}</span>
+            ) : null}
+            <Button variant="outline" disabled={!chats.ready} onClick={() => onCreateQuiz(active ? active.subjectId : chats.draftSubjectId, active?.id ?? null)}>
+              <ClipboardCheck /> Tạo Quiz
+            </Button>
             {active ? (
-              <div className="flex shrink-0 items-center gap-1">
-                <Button variant="ghost" size="icon" aria-label="Đổi tên cuộc hội thoại" onClick={() => setEditor({ id: active.id, title: active.title })}>
-                  <Pencil className="size-4" />
-                </Button>
-                <Button variant="ghost" size="icon" aria-label="Xóa cuộc hội thoại" onClick={() => setDeleteId(active.id)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="more" aria-label="Đổi tên hoặc xóa cuộc hội thoại">
+                    <Ellipsis className="size-5" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="menu-panel" align="end">
+                  <DropdownMenuItem onSelect={() => setEditor({ id: active.id, title: active.title })}>
+                    <Pencil /> Đổi tên cuộc hội thoại
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onSelect={() => setDeleteId(active.id)}>
+                    <Trash2 /> Xóa cuộc hội thoại
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
           </div>
 
@@ -203,7 +195,7 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
               />
             )}
             <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>
-              Tài liệu đính kèm / môn học sẽ được AI tìm kiếm để trả lời · Shift + Enter để xuống dòng
+              AI tìm trong tài liệu của môn và tệp đính kèm để trả lời. Shift + Enter để xuống dòng.
             </p>
             </div>
           </div>

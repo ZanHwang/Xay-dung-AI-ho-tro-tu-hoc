@@ -75,38 +75,38 @@ export function PersonalExams() {
   }
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(265px,1fr)_minmax(0,1.6fr)]">
-      <div>
-        <section className="card">
-          <h3>Nộp bài thi cá nhân</h3>
-          <p className="meta mb-4">PDF, PNG hoặc JPEG. Tối đa 8 MB mỗi tệp và 12 trang, ảnh mỗi lượt.</p>
+    <div className="two-col">
+      <div className="panel-stack">
+        <section className="panel">
+          <h2>Bài cần chấm</h2>
           <form onSubmit={grade} className="space-y-3">
-            <ExamFilePicker label="Đề thi" files={exam} onChange={setExam} disabled={!!busy} />
-            <ExamFilePicker label="Bài làm" files={answer} onChange={setAnswer} disabled={!!busy} />
-            <ExamFilePicker label="Đáp án hoặc barem chính thức" files={official} onChange={setOfficial} optional disabled={!!busy} />
+            <ExamFilePicker label="Đề thi" tone="cover-cyan" files={exam} onChange={setExam} disabled={!!busy} />
+            <ExamFilePicker label="Bài làm" tone="cover-violet" files={answer} onChange={setAnswer} disabled={!!busy} />
+            <ExamFilePicker label="Đáp án hoặc barem chính thức" tone="cover-amber" files={official} onChange={setOfficial} optional disabled={!!busy} />
             <Button type="submit" disabled={!!busy || !exam.length || !answer.length} className="w-full">
               <Sparkles aria-hidden /> {busy === "grade" ? "Đang nhận diện và chấm…" : "Nhận diện và chấm bài"}
             </Button>
           </form>
+          <p className="meta mt-2">PDF, PNG hoặc JPEG. Tối đa 8 MB mỗi tệp và 12 trang, ảnh mỗi lượt.</p>
           {error ? <p role="alert" className="error-box mt-3">{error}</p> : null}
         </section>
-        <section className="card">
-          <h3 className="flex items-center gap-2"><History className="size-4" /> Lịch sử cá nhân</h3>
+        <section className="panel">
+          <h2 className="flex items-center gap-2"><History className="size-5" aria-hidden /> Đã chấm</h2>
           {historyError ? <p className="meta" role="status">{historyError}</p> : null}
           {history === null && !historyError ? <p className="meta" role="status">Đang tải lịch sử…</p> : null}
           {history?.length === 0 ? <p className="meta">Chưa có bài thi đã nộp.</p> : null}
-          <ul className="mt-3 space-y-2">
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {history?.map((item) => (
               <li key={item.id}>
                 <button
                   type="button" disabled={!!busy} aria-pressed={result?.id === item.id}
                   onClick={() => void openSubmission(item.id)}
-                  className="list-row w-full text-left aria-pressed:bg-[var(--accent-soft)]"
+                  className="row-link aria-pressed:bg-[var(--accent-soft)]"
                 >
-                  <span className="min-w-0 grow">
-                    <span className="title block">{new Date(item.created_at + (item.created_at.endsWith("Z") ? "" : "Z")).toLocaleString("vi-VN")}</span>
+                  <span className="grow">
+                    <span className="title">{new Date(item.created_at + (item.created_at.endsWith("Z") ? "" : "Z")).toLocaleString("vi-VN")}</span>
                     {item.ai_total !== null && item.max_total !== null ? (
-                      <span className="meta">{formatPoints(item.ai_total)} / {formatPoints(item.max_total)} điểm</span>
+                      <span className="sub2">{formatPoints(item.ai_total)} / {formatPoints(item.max_total)} điểm</span>
                     ) : null}
                   </span>
                   <ExamStatus state={item.state} />
@@ -116,7 +116,7 @@ export function PersonalExams() {
           </ul>
         </section>
       </div>
-      <section className="card min-w-0 !mt-0">
+      <section className="panel" aria-label="Kết quả chấm">
         {result ? (
           <div className="space-y-4">
             {result.state === "needs_review" ? (
@@ -132,7 +132,7 @@ export function PersonalExams() {
           </div>
         ) : (
           <div className="empty">
-            <FileSearch className="mx-auto mb-2 size-8" aria-hidden />
+            <FileSearch className="mb-2 size-8" aria-hidden />
             <h3>{busy === "grade" ? "Đang xử lý bài thi" : "Chưa có kết quả"}</h3>
             <p>{busy === "grade" ? "AI đang đọc các trang và đối chiếu từng câu." : "Tải đề và bài làm lên hoặc mở một lượt chấm từ lịch sử."}</p>
           </div>

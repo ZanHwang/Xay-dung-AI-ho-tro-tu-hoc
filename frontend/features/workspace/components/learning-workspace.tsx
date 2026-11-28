@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuizzes } from "@/features/quiz/hooks/use-quizzes";
 import { useQuizOverlay } from "@/features/quiz/hooks/use-quiz-overlay";
 import { QuizOverlay } from "@/features/quiz/components/quiz-overlay";
 import { DueReviewDialog } from "@/features/reviews/components/due-review-dialog";
 import { useDueReviews } from "@/features/reviews/hooks/use-due-reviews";
-import { pageTitles } from "@/config/navigation";
 import type { UserProfile } from "@/features/auth/services/auth-api";
 
-import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { DeskStrip } from "@/components/shared/desk-strip";
+import type { SubjectTab } from "@/features/subjects/components/subject-detail";
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page";
 import { SettingsPage } from "@/features/settings/pages/settings-page";
 import { SubjectsPage } from "@/features/subjects/pages/subjects-page";
@@ -26,10 +26,12 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
   const overlay = useQuizOverlay(quizzes);
   const dueReviews = useDueReviews();
   const workspace = useLearningWorkspace(chats.store.startNew);
-
-  // A subject's own name heads its page (on the notebook label), so the top bar
-  // only names the section.
-  const pageTitle = pageTitles[workspace.activePage];
+  // Which tab a subject opens on ("Mở lộ trình" goes straight to Lộ trình).
+  const [subjectTab, setSubjectTab] = useState<SubjectTab>("documents");
+  const openSubject = (id: string, tab: SubjectTab = "documents") => {
+    setSubjectTab(tab);
+    workspace.openSubject(id);
+  };
 
   // `chats` is instantiated once here and never remounts, so its own list
   // fetch only ever runs on first load (see use-conversations.ts::refresh) -
@@ -56,7 +58,6 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
           so they fill just this content column instead of the whole
           viewport, keeping the sidebar always visible and clickable. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ contain: "layout" }}>
-        <AppHeader title={pageTitle} onOpenReview={overlay.openDueDialog} />
         {workspace.error ? (
           <div className="banner flex items-center justify-between gap-3" role="alert">
             <span className="flex-1">{workspace.error}</span>
@@ -75,7 +76,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
             <span className="flex-1">{overlay.reviewError}</span>
           </div>
         ) : null}
-        <main className="content min-h-0 flex-1 overflow-y-auto">
+        <main className="content flex min-h-0 flex-1 flex-col overflow-y-auto">
           {workspace.activePage === "dashboard" ? (
             <DashboardPage
               userName={user.name}
@@ -83,7 +84,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               subjects={workspace.subjects}
               conversations={chats.conversations}
               onNavigate={workspace.navigate}
-              onOpenSubject={workspace.openSubject}
+              onOpenSubject={openSubject}
               onCreateSubject={workspace.addSubject}
               onViewQuiz={overlay.open}
               onOpenReview={overlay.openDueDialog}
@@ -98,7 +99,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               isVisible={true}
               subjects={workspace.subjects}
               chats={chats}
-              onCreateQuiz={(subjectId) => subjectId ? workspace.openSubject(subjectId) : workspace.navigate("subjects")}
+              onCreateQuiz={(subjectId) => subjectId ? openSubject(subjectId) : workspace.navigate("subjects")}
             />
           ) : null}
           {workspace.activePage === "subjects" ? (
@@ -106,8 +107,12 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               quizzes={quizzes}
               subjects={workspace.subjects}
               selectedSubject={workspace.selectedSubject}
-              onBack={workspace.clearSelectedSubject}
-              onOpen={workspace.openSubject}
+              initialTab={subjectTab}
+              onBack={() => {
+                workspace.clearSelectedSubject();
+                workspace.navigate("dashboard");
+              }}
+              onOpen={openSubject}
               onCreate={workspace.addSubject}
               onUpdate={workspace.updateSubject}
               onDelete={workspace.deleteSubject}
@@ -120,6 +125,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
           {workspace.activePage === "settings" ? <SettingsPage profile={user} /> : null}
           {workspace.activePage === "essay" ? <EssayPage /> : null}
           {workspace.activePage === "classes" ? <ClassesPage profile={user} /> : null}
+          {workspace.activePage === "dashboard" || workspace.activePage === "subjects" ? <DeskStrip /> : null}
         </main>
       </div>
       <QuizOverlay

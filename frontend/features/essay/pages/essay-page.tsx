@@ -27,21 +27,29 @@ const gradeMethods: Record<EssayGrade["mode"], string> = {
 
 export function EssayPage() {
   return (
-    <div>
-      <div className="view-head">
-        <h2>Chấm bài thi</h2>
-        <p>Chấm trắc nghiệm và tự luận từ ảnh hoặc PDF, xem cách sửa từng câu.</p>
-      </div>
+    <div className="page">
       <Tabs defaultValue="files">
-        <TabsList className="mb-4">
-          <TabsTrigger value="files">Tải đề và bài làm</TabsTrigger>
-          <TabsTrigger value="typed">Tự luận nhập tay</TabsTrigger>
-        </TabsList>
+        <div className="view-head title-row">
+          <div>
+            <h1>Chấm bài</h1>
+            <p>Chấm trắc nghiệm và tự luận, xem cách sửa từng câu.</p>
+          </div>
+          <TabsList className="segmented" aria-label="Cách nộp bài">
+            <TabsTrigger value="files">Gửi tệp</TabsTrigger>
+            <TabsTrigger value="typed">Gõ trực tiếp</TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value="files"><PersonalExams /></TabsContent>
         <TabsContent value="typed"><TypedEssay /></TabsContent>
       </Tabs>
     </div>
   );
+}
+
+/** Color of a score tag: full marks, part of them, or none. */
+function scoreTone(score: number, max: number) {
+  if (score >= max) return "pill-green";
+  return score > 0 ? "pill-amber" : "pill-red";
 }
 
 function TypedEssay() {
@@ -71,81 +79,68 @@ function TypedEssay() {
     setEssay(SAMPLE_ESSAY);
   };
 
-  const textareaClass = "input" as const;
-
   return (
-    <div>
-      <div style={{ marginTop: 24, display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
-        <section className="card">
-          <label className="field">
-            Đề bài
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} className={textareaClass} />
-          </label>
-          <label className="field">
-            Barem — mỗi dòng một tiêu chí
-            <textarea value={rubric} onChange={(e) => setRubric(e.target.value)} rows={5} className={textareaClass} />
-            <span className="meta">Định dạng: tên tiêu chí - số điểm.</span>
-          </label>
-          <label className="field">
-            Bài làm
-            <textarea value={essay} onChange={(e) => setEssay(e.target.value)} rows={6} className={textareaClass} />
-          </label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-            <Button onClick={() => void grade()} disabled={busy || !essay.trim()}>
-              {busy ? "Đang chấm…" : <><Sparkles /> Chấm bài này</>}
-            </Button>
-            <Button variant="outline" onClick={fillSample}>Điền bài mẫu</Button>
+    <div className="two-col">
+      <section className="panel">
+        <h2>Bài cần chấm</h2>
+        <label className="field">
+          Đề bài
+          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} className="input" />
+        </label>
+        <label className="field">
+          Barem, mỗi dòng một tiêu chí
+          <textarea value={rubric} onChange={(e) => setRubric(e.target.value)} rows={5} className="input" />
+          <span className="meta">Định dạng: tên tiêu chí - số điểm.</span>
+        </label>
+        <label className="field">
+          Bài làm
+          <textarea value={essay} onChange={(e) => setEssay(e.target.value)} rows={6} className="input" />
+        </label>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => void grade()} disabled={busy || !essay.trim()}>
+            {busy ? "Đang chấm…" : <><Sparkles /> Chấm bài này</>}
+          </Button>
+          <Button variant="outline" onClick={fillSample}>Điền bài mẫu</Button>
+        </div>
+        {error ? (
+          <div role="alert" className="error-box" style={{ marginTop: 12 }}>
+            <p>{error}</p>
           </div>
-          {error ? (
-            <div role="alert" className="error-box" style={{ marginTop: 12 }}>
-              <p>{error}</p>
-            </div>
-          ) : null}
-        </section>
+        ) : null}
+      </section>
 
-        <section className="card">
-          <div className="label" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--accent-strong)" }}>
-            <PenLine className="size-4" /> Kết quả chấm
+      <section className="panel" aria-label="Kết quả chấm">
+        {!result ? (
+          <div className="empty">
+            <PenLine className="mb-2 size-7" style={{ color: "var(--muted)" }} aria-hidden="true" />
+            <h3>Chưa chấm bài nào</h3>
+            <p>Nhập đề, barem và bài làm rồi bấm “Chấm bài này” để xem điểm và nhận xét theo từng tiêu chí.</p>
           </div>
-          {!result ? (
-            <div className="empty" style={{ marginTop: 16 }}>
-              <PenLine className="mx-auto mb-2 size-7" style={{ color: "var(--muted)" }} />
-              <h3>Chưa chấm bài nào</h3>
-              <p>Nhập đề, barem và bài làm rồi bấm “Chấm bài này” để xem điểm và nhận xét theo từng tiêu chí.</p>
-            </div>
-          ) : (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-                <span style={{ fontSize: 36, fontWeight: 700, fontFamily: "Lexend, sans-serif" }}>
-                  {result.total.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
-                </span>
-                <span className="meta">
-                  / {result.max_total} điểm · {gradeMethods[result.mode]}
-                </span>
+        ) : (
+          <>
+            <div className="total mb-4">
+              <span className="score-pen big">
+                {result.total.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+              </span>
+              <div>
+                <h3>trên {result.max_total} điểm</h3>
+                <span className="pill pill-blue">{gradeMethods[result.mode]}</span>
               </div>
-              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-                {result.scores.map((s) => (
-                  <div key={s.criterion} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 12 }}>
-                    <div className="row-between" style={{ fontSize: 14 }}>
-                      <span className="title">{s.criterion}</span>
-                      <span style={{ fontWeight: 600, color: "var(--accent-strong)" }}>{s.score} / {s.max}</span>
-                    </div>
-                    {s.quote ? (
-                      <p style={{ marginTop: 8, background: "var(--surface-2)", borderRadius: 8, padding: 8, fontSize: 12, fontStyle: "italic", color: "var(--ink-2)" }}>
-                        “{s.quote}”
-                      </p>
-                    ) : null}
-                    {s.feedback ? <p className="meta" style={{ marginTop: 8, fontSize: 12 }}>{s.feedback}</p> : null}
-                  </div>
-                ))}
-              </div>
-              {result.overall ? (
-                <p style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16, fontSize: 14 }}>{result.overall}</p>
-              ) : null}
             </div>
-          )}
-        </section>
-      </div>
+            {result.scores.map((s) => (
+              <div key={s.criterion} className="graded">
+                <div className="flex items-start justify-between gap-3">
+                  <b>{s.criterion}</b>
+                  <span className={`pill ${scoreTone(s.score, s.max)}`}>{s.score} / {s.max}</span>
+                </div>
+                {s.quote ? <p className="quote"><span className="mark-hl">{s.quote}</span></p> : null}
+                {s.feedback ? <p className="mt-1">{s.feedback}</p> : null}
+              </div>
+            ))}
+            {result.overall ? <p className="graded">{result.overall}</p> : null}
+          </>
+        )}
+      </section>
     </div>
   );
 }

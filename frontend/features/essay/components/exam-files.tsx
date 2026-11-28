@@ -9,16 +9,24 @@ import { examApi, type ExamFile } from "../services/exam-api";
 export const fileRoles = { exam: "Đề thi", answer: "Bài làm", official: "Đáp án chính thức" };
 
 export function ExamFilePicker({
-  label, files, onChange, optional = false, disabled = false,
+  label, files, onChange, optional = false, disabled = false, tone = "cover-cyan",
 }: {
   label: string; files: File[]; onChange: (files: File[]) => void; optional?: boolean; disabled?: boolean;
+  /** Cover color of the file icon. */
+  tone?: string;
 }) {
   return (
-    <label className="block cursor-pointer rounded-xl border border-dashed p-3 focus-within:ring-2 focus-within:ring-ring">
-      <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
-        <Upload className="size-4" aria-hidden /> {label}
-        {optional ? <span className="meta">Tuỳ chọn</span> : null}
+    <label className="slot">
+      <span className={`file-ic ${tone}`} aria-hidden="true">
+        <Upload className="size-5" />
       </span>
+      <span className="slot-text">
+        <b>{label}</b>
+        <small>
+          {files.length ? files.map((file) => file.name).join(", ") : optional ? "Không bắt buộc" : "Chưa chọn tệp"}
+        </small>
+      </span>
+      <span className="btn btn-outline shrink-0" aria-hidden="true">Chọn tệp</span>
       <input
         className="sr-only"
         aria-label={label}
@@ -28,11 +36,6 @@ export function ExamFilePicker({
         disabled={disabled}
         onChange={(event) => onChange(Array.from(event.currentTarget.files ?? []))}
       />
-      <span className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-md border bg-background px-2.5 py-1.5 font-medium">Chọn tệp</span>
-        <span className="meta">{files.length ? `Đã chọn ${files.length} tệp` : "Chưa chọn tệp"}</span>
-      </span>
-      {files.length ? <span className="meta mt-1.5 block break-words">{files.map((file) => file.name).join(", ")}</span> : null}
     </label>
   );
 }

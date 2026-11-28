@@ -2,7 +2,7 @@
 // Subject Accent (UI color theme)
 // =============================================================================
 
-export type SubjectAccent = "cyan" | "violet" | "amber" | "emerald";
+export type SubjectAccent = "cyan" | "violet" | "amber" | "emerald" | "rose" | "orange";
 
 // =============================================================================
 // Frontend Subject (aligned with backend + UI computed fields)
@@ -30,6 +30,8 @@ export type Subject = {
   lastStudied: string;     // From stats.last_activity
   accent: SubjectAccent;   // Derived from color
   currentTopic?: string;   // User's current topic
+  documentCount?: number;  // From stats (subject list)
+  quizCount?: number;      // From stats (subject list)
 };
 
 // =============================================================================
@@ -99,6 +101,8 @@ const ACCENT_TO_COLOR: Record<SubjectAccent, string> = {
   violet: "#8b5cf6",
   amber: "#f59e0b",
   emerald: "#10b981",
+  rose: "#f43f5e",
+  orange: "#f97316",
 };
 
 const COLOR_TO_ACCENT: Record<string, SubjectAccent> = {
@@ -106,15 +110,19 @@ const COLOR_TO_ACCENT: Record<string, SubjectAccent> = {
   "#8b5cf6": "violet",
   "#f59e0b": "amber",
   "#10b981": "emerald",
+  "#f43f5e": "rose",
+  "#f97316": "orange",
 };
 
 /** Notebook cover choices. The accent is what gets saved (as its hex color);
  * the cover shade shown on screen comes from `.cover-<accent>` in globals.css. */
 export const COVER_OPTIONS: { accent: SubjectAccent; label: string }[] = [
-  { accent: "cyan", label: "Xanh ngọc" },
-  { accent: "violet", label: "Tím mực" },
-  { accent: "amber", label: "Cam đất" },
   { accent: "emerald", label: "Xanh lá" },
+  { accent: "cyan", label: "Xanh dương" },
+  { accent: "amber", label: "Vàng" },
+  { accent: "violet", label: "Tím" },
+  { accent: "rose", label: "San hô" },
+  { accent: "orange", label: "Cam" },
 ];
 
 /** The backend's default color: what a subject has when nobody picked a cover. */

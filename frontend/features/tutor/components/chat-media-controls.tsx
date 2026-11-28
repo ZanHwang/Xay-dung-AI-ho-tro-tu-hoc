@@ -74,14 +74,14 @@ export function ChatMediaControls({ disabled, onFiles, onVoice, input, onInput, 
 
   return (
     <div className="space-y-2">
-      <div className="flex items-end gap-1 rounded-2xl border bg-card p-2 sm:gap-2" style={{ borderColor: "var(--border)", background: "var(--surface)", boxShadow: "0 0 0 0 transparent" }}>
+      <div className="ask-box">
         <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" aria-label="Chọn ảnh bài tập"
           onChange={(event) => { onFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
         <input ref={documents} type="file" accept={DOCUMENT_ACCEPT} multiple className="hidden" aria-label="Chọn tài liệu"
           onChange={(event) => { onFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" disabled={disabled || listening} aria-label="Thêm ảnh hoặc tài liệu" title="Thêm ảnh hoặc tài liệu" className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
+            <Button size="icon" variant="ghost" disabled={disabled || listening} aria-label="Thêm ảnh hoặc tài liệu" title="Thêm ảnh hoặc tài liệu" className="size-10 shrink-0 rounded-lg text-foreground hover:bg-secondary hover:text-foreground">
               <Plus className="size-5" />
             </Button>
           </DropdownMenuTrigger>
@@ -99,16 +99,15 @@ export function ChatMediaControls({ disabled, onFiles, onVoice, input, onInput, 
           </DropdownMenuContent>
         </DropdownMenu>
         <Textarea
-          aria-label="Câu hỏi cho AI Tutor"
+          aria-label="Câu hỏi cho AI"
           rows={1}
           value={input}
           disabled={disabled || listening}
           onChange={(event) => onInput(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); onSend(); } }}
           placeholder={listening ? "Đang nghe… bấm mic để dừng" : "Bạn muốn hỏi gì?"}
-          className="min-h-9 max-h-36 min-w-0 flex-1 resize-none rounded-none border-0 bg-transparent px-1 py-2 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:opacity-70"
+          className="min-h-10 max-h-36 min-w-0 flex-1 resize-none rounded-none border-0 bg-transparent px-1 py-2 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:opacity-70"
         />
-        <span className="hidden shrink-0 self-center text-xs text-muted-foreground sm:block">AI Tutor</span>
         <Button
           size="icon"
           variant="ghost"
@@ -116,7 +115,7 @@ export function ChatMediaControls({ disabled, onFiles, onVoice, input, onInput, 
           aria-pressed={listening}
           aria-label={listening ? "Dừng ghi âm" : "Bắt đầu ghi âm"}
           title={listening ? "Bấm để dừng nói" : "Nhập bằng giọng nói"}
-          className={`size-9 shrink-0 rounded-full ${listening ? "animate-pulse" : ""}`}
+          className={`size-10 shrink-0 rounded-lg ${listening ? "animate-pulse" : ""}`}
           style={listening ? { background: "var(--error-soft)", color: "var(--error)" } : undefined}
           onClick={() => {
             if (!listening) start();
@@ -131,8 +130,7 @@ export function ChatMediaControls({ disabled, onFiles, onVoice, input, onInput, 
           onClick={onSend}
           aria-label="Gửi câu hỏi"
           title="Gửi câu hỏi"
-          className="size-9 shrink-0 rounded-full text-white disabled:opacity-40"
-          style={{ background: "var(--accent)" }}
+          className="size-10 shrink-0 rounded-lg disabled:opacity-40"
         >
           <ArrowUp className="size-5" />
         </Button>
