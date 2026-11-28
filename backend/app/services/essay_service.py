@@ -193,12 +193,17 @@ class EssayService:
 
     # -- list -------------------------------------------------------------
 
-    def pending_for_class(self, class_id: UUID) -> List[dict]:
-        """The class's pending essays, tagged with the student's name (teacher view)."""
+    def pending_for_class(self, class_id: UUID, teacher_id: UUID) -> List[dict]:
+        """The class's pending essays, tagged with the student's name - only
+        for the class's own teacher (they hold students' full essay text)."""
         from app.models import ClassRoom, Enrollment
-        room = self.db.query(ClassRoom).filter(ClassRoom.id == class_id).first()
+        room = (
+            self.db.query(ClassRoom)
+            .filter(ClassRoom.id == class_id, ClassRoom.teacher_id == teacher_id)
+            .first()
+        )
         if not room:
-            raise HTTPException(status_code=404, detail="Không tìm thấy lớp")
+            raise HTTPException(status_code=404, detail="Không tìm thấy lớp hoặc không phải lớp của bạn")
         rows = (
             self.db.query(Essay, User)
             .join(Enrollment, Enrollment.user_id == Essay.user_id)

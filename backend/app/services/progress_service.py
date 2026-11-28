@@ -1,7 +1,7 @@
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func
-from app.models import Subject, QuizResult
+from sqlalchemy import case, desc, func
+from app.models import Subject, QuizQuestion, QuizResult
 
 
 class ProgressService:
@@ -21,12 +21,23 @@ class ProgressService:
         # just to sum/average/count them in Python - same cost either way
         # for a handful of rows, but scales badly for an account with a long
         # quiz history (the whole table transferred on every dashboard load).
+        # Quizzes done / average score count FULL attempts only - a due-review
+        # or retry-wrong session answers just a few of a quiz's questions and
+        # would otherwise count as a whole quiz (and skew the average).
+        # Questions answered still counts every attempt.
+        question_counts = (
+            self.db.query(QuizQuestion.quiz_id, func.count(QuizQuestion.id).label("n"))
+            .group_by(QuizQuestion.quiz_id)
+            .subquery()
+        )
+        is_full = QuizResult.total_questions >= question_counts.c.n
         totals = (
             self.db.query(
-                func.count(QuizResult.id),
+                func.coalesce(func.sum(case((is_full, 1), else_=0)), 0),
                 func.coalesce(func.sum(QuizResult.total_questions), 0),
-                func.coalesce(func.avg(QuizResult.score), 0),
+                func.coalesce(func.avg(case((is_full, QuizResult.score))), 0),
             )
+            .outerjoin(question_counts, question_counts.c.quiz_id == QuizResult.quiz_id)
             .filter(QuizResult.user_id == user_id)
             .one()
         )

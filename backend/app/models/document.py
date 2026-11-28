@@ -27,7 +27,7 @@ class Document(Base):
     subject_id = Column(UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)
-    file_type = Column(String(20), nullable=False)  # pdf, docx, pptx
+    file_type = Column(String(20), nullable=False)  # pdf (uploads are PDF-only)
     file_size = Column(Integer, nullable=True)  # bytes
     status = Column(Enum(DocumentStatus), default=DocumentStatus.UPLOADING)
     total_pages = Column(Integer, nullable=True)

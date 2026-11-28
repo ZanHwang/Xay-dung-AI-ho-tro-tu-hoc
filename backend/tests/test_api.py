@@ -138,6 +138,31 @@ class TestAuth:
         data = response.json()
         assert data["email"] == "test@example.com"
 
+    def test_refresh_token(self, client):
+        """A valid token can be swapped for a fresh, usable one; no token can't."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "test@example.com",
+                "password": "password123",
+                "confirm_password": "password123",
+                "full_name": "Test User"
+            }
+        )
+        token = client.post(
+            "/api/auth/login",
+            data={"username": "test@example.com", "password": "password123"}
+        ).json()["access_token"]
+
+        response = client.post("/api/auth/refresh", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        new_token = response.json()["access_token"]
+        me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {new_token}"})
+        assert me.status_code == 200
+        assert me.json()["email"] == "test@example.com"
+
+        assert client.post("/api/auth/refresh").status_code == 401
+
 
 class TestSubjects:
     """Test subject endpoints."""

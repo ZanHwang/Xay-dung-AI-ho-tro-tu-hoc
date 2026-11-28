@@ -32,6 +32,12 @@ export function ClassesPage({ profile }: { profile: UserProfile }) {
   async function selectRoom(room: ClassRoom) {
     setSelected(room);
     setMessage("");
+    // Pending essays are the teacher's grading queue - students must never
+    // fetch classmates' essays (the backend also refuses non-teachers).
+    if (!isTeacher) {
+      setPending([]);
+      return;
+    }
     try {
       const p = await classesApi.pendingEssays(room.id);
       setPending(p.essays);

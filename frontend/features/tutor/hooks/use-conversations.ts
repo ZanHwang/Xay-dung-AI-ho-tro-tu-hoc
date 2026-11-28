@@ -48,11 +48,13 @@ export function useConversations(userId: string) {
   }
 
   // Load a server-side conversation's messages into the local store (used when
-  // the user opens a conversation that was pulled from the list without its
-  // message bodies). No-op when the list already has messages.
+  // the user opens a conversation pulled from the list without its message
+  // bodies, or one the server has more messages for - continued elsewhere).
+  // No-op when the local copy is already complete.
   async function loadMessages(id: string) {
     if (isDemoMode) return;
-    if (store.getSnapshot().conversations.some((c) => c.id === id && c.messages.length > 0)) return;
+    const local = store.getSnapshot().conversations.find((c) => c.id === id);
+    if (local && local.messages.length > 0 && local.messages.length >= (local.messageCount ?? 0)) return;
     try {
       // The endpoint returns messages oldest-first, capped at 100. For long
       // conversations the interesting part is the LAST 100, so when the total
@@ -62,7 +64,14 @@ export function useConversations(userId: string) {
         page.total > page.messages.length
           ? (await chatApi.getMessages(id, { limit: 100, offset: page.total - 100 })).messages
           : page.messages;
-      store.setMessages(id, messages);
+      // Attachments/sources live only in the local copy - keep the local
+      // version of any message the server also has (same role + content).
+      const localByKey = new Map<string, ChatMessage[]>();
+      for (const message of local?.messages ?? []) {
+        const key = `${message.role}\u0000${message.content}`;
+        localByKey.set(key, [...(localByKey.get(key) ?? []), message]);
+      }
+      store.setMessages(id, messages.map((message) => localByKey.get(`${message.role}\u0000${message.content}`)?.shift() ?? message));
     } catch (err) {
       console.error("Failed to load messages:", err);
     }

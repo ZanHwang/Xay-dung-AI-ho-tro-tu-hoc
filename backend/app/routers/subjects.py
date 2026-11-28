@@ -111,15 +111,16 @@ def update_subject(
 
 
 @router.delete("/{subject_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_subject(
+async def delete_subject(
     subject_id: UUID,
     current_user: User = Depends(get_current_user),
     service: SubjectService = Depends(get_subject_service)
 ):
     """
-    Delete a subject.
+    Delete a subject with its documents (files, figures, vectors), chats and
+    quizzes.
     """
-    service.delete_subject(subject_id, current_user.id)
+    await service.delete_subject(subject_id, current_user.id)
     return None
 
 

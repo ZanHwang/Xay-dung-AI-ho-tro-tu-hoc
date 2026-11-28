@@ -172,6 +172,17 @@ export function createConversationStore(getStorage: StorageAccess, userId?: stri
             ? { ...item, ...conversation }
             : item),
         });
+        return;
+      }
+      // Continued elsewhere (another device, or Lộ trình "Học"): the server
+      // has more messages than this local copy. Take its metadata + count but
+      // keep the local messages; the Tutor page reloads them on open.
+      if ((conversation.messageCount ?? 0) > local.messages.length) {
+        save({ ...state,
+          conversations: state.conversations.map((item) => item.id === conversation.id
+            ? { ...item, ...conversation, messages: item.messages }
+            : item),
+        });
       }
     },
   };

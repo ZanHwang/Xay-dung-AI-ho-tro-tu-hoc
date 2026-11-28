@@ -62,7 +62,7 @@ def class_members(
     db: Session = Depends(get_db),
     service: ClassService = Depends(get_class_service),
 ):
-    return service.members(class_id)
+    return service.members(class_id, current_user.id)
 
 
 @router.get("/{class_id}/essays/pending", response_model=PendingListOut)
@@ -72,7 +72,7 @@ def pending_essays(
     service: EssayService = Depends(get_essay_service),
 ):
     """Pending (ungraded) essays in a class, tagged with the student's name."""
-    rows = service.pending_for_class(class_id)
+    rows = service.pending_for_class(class_id, current_user.id)
     return PendingListOut(total=len(rows), essays=[PendingEssayOut(**r) for r in rows])
 
 

@@ -191,7 +191,8 @@ async def get_document_page_image(
     document = service.get_document_by_id(document_id, current_user.id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    png = render_page_png(resolve_document_path(document), page_no)
+    # page_no is 1-based; 0/negative would index from the end (doc[-1]).
+    png = render_page_png(resolve_document_path(document), page_no) if page_no >= 1 else None
     if not png:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
     return Response(content=png, media_type="image/png")

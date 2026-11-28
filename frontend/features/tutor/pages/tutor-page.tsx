@@ -40,21 +40,19 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
     : subjects.find((subject) => subject.id === id)?.name ?? "Môn học không còn tồn tại";
   const conversations = [...chats.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  // Open a conversation: switch to it and lazily fetch its messages from the
-  // server when the local list is empty. Only server-pulled conversations
-  // (which carry a messageCount) need this; a locally created one already has
-  // its own messages (or is brand new).
   function openConversation(id: string) {
     chats.store.select(id);
-    const conversation = chats.conversations.find((item) => item.id === id);
-    if (conversation && conversation.messages.length === 0 && conversation.messageCount !== undefined) {
-      void chats.loadMessages(id);
-    }
   }
-  // The list view shows the real count even before a conversation's messages
-  // are loaded locally: prefer the local list (live), else the server count.
+  // Fetch the active conversation's messages whenever the server knows more
+  // of them than this local copy holds: pulled from the list without bodies,
+  // or continued elsewhere (another device / Lộ trình "Học"). setMessages
+  // clears messageCount afterwards, so this doesn't loop.
+  useEffect(() => {
+    if (active && active.messages.length < (active.messageCount ?? 0)) void chats.loadMessages(active.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.messageCount, active?.messages.length]);
   const displayCount = (conversation: (typeof chats.conversations)[number]) =>
-    conversation.messages.length > 0 ? conversation.messages.length : (conversation.messageCount ?? 0);
+    Math.max(conversation.messages.length, conversation.messageCount ?? 0);
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: "nearest" }); }, [active?.id, active?.messages.length, pending]);
 

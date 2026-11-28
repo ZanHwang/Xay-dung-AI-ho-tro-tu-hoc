@@ -121,8 +121,12 @@ class SubjectService:
         self.db.refresh(subject)
         return subject
 
-    def delete_subject(self, subject_id: UUID, user_id: UUID) -> bool:
-        """Delete a subject (soft delete by setting inactive)."""
+    async def delete_subject(self, subject_id: UUID, user_id: UUID) -> bool:
+        """Delete a subject and everything in it. The ORM cascade on Subject
+        deletes its documents, conversations and quizzes rows; each document's
+        vectors, file and figures live outside the DB, so purge them first."""
+        from app.services.document_service import DocumentService
+
         subject = self.get_subject_by_id(subject_id, user_id)
         if not subject:
             raise HTTPException(
@@ -130,6 +134,9 @@ class SubjectService:
                 detail="Subject not found"
             )
 
+        documents = DocumentService(self.db)
+        for document in subject.documents:
+            await documents.purge_storage(document)
         self.db.delete(subject)
         self.db.commit()
         return True

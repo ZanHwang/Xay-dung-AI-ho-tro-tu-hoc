@@ -23,7 +23,7 @@ import {
   type DocumentStatus,
 } from "../services/document-api";
 
-const ALLOWED_DISPLAY = ["PDF", "DOCX", "PPTX"];
+const ALLOWED_DISPLAY = ["PDF"];
 
 // A document stuck this long in a non-"ready"/"failed" status is very
 // unlikely to still be legitimately working - process_document runs as a

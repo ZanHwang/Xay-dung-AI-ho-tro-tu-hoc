@@ -34,6 +34,7 @@ export function DocumentPicker({ files, onChange, disabled }: Props) {
         <input
           ref={inputRef}
           type="file"
+          accept=".pdf,application/pdf"
           multiple
           disabled={disabled}
           className="sr-only"
@@ -56,7 +57,7 @@ export function DocumentPicker({ files, onChange, disabled }: Props) {
         </ul>
       ) : null}
       <p className="meta">
-        Hỗ trợ PDF, Word, PowerPoint — tối đa {MAX_FILE_SIZE / (1024 * 1024)}MB mỗi file.
+        Chỉ nhận PDF (Word/PowerPoint hãy xuất sang PDF trước) — tối đa {MAX_FILE_SIZE / (1024 * 1024)}MB mỗi file.
       </p>
     </div>
   );

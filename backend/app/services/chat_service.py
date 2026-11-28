@@ -55,10 +55,17 @@ class ChatService:
         # user message - what the AI must remember between turns)
         history = self._get_history_for_context(conversation.id, user_message.id)
 
+        # A Lộ trình "Học" conversation carries its topic as context for the
+        # AI only - the stored user message stays exactly what the user typed.
+        ai_message_text = (
+            f"[Đang học chủ đề: {conversation.topic}] {request.content}"
+            if conversation.topic else request.content
+        )
+
         # Process with AI Orchestrator
         ai_result = await ai_orchestrator.process_request(
             user_id=user_id,
-            message=request.content,
+            message=ai_message_text,
             mode=request.mode,
             conversation_history=history,
             document_ids=request.document_ids

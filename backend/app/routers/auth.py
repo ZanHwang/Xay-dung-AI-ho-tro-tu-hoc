@@ -36,6 +36,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return token_data
 
 
+@router.post("/refresh", response_model=Token)
+def refresh_token(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Exchange a still-valid token for a fresh one (sliding session): the
+    frontend calls this while the user is active, so they are only logged out
+    after a full token lifetime of inactivity, not mid-session.
+    """
+    return AuthService(db).create_token(current_user)
+
+
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):
     """

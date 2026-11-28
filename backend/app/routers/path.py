@@ -101,7 +101,7 @@ async def ask_about_topic(
     )
     request = ChatRequest(
         conversation_id=conversation.id,
-        content=f"[Đang học chủ đề: {topic}] {data.content}",
+        content=data.content,
         mode="rag",
         subject_id=subject_id,
         document_ids=[document_id],

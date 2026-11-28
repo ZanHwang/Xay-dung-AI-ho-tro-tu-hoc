@@ -21,7 +21,9 @@ from app.ai.qdrant_store import qdrant_store
 from app.ai.vision import caption_figure, ocr_page, inspect_figure
 
 # Supported file types
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".pptx"}
+# PDF only: page numbers, OCR, figures and page images (Lộ trình "Học") all
+# come from the PDF pipeline - users convert Word/PowerPoint to PDF first.
+ALLOWED_EXTENSIONS = {".pdf"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Document ids with a `process_document` task currently running IN THIS
@@ -81,7 +83,7 @@ class DocumentService:
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File type not supported. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                detail="Chỉ hỗ trợ file PDF. Hãy chuyển file Word/PowerPoint sang PDF trước khi tải lên."
             )
         return ext
 
@@ -225,10 +227,7 @@ class DocumentService:
             chunks: List[str] = []
             figures: List[Optional[str]] = []  # parallel to chunks
 
-            if (info["file_type"] or "").lower() == "pdf":
-                chunks, figures = await self._process_pdf(document_id, user_id, info["file_path"])
-            else:
-                text = extract_text(info["file_path"])
+            chunks, figures = await self._process_pdf(document_id, user_id, info["file_path"])
 
             if not chunks:
                 text = extract_text(info["file_path"])
@@ -415,25 +414,6 @@ class DocumentService:
         self.db.refresh(document)
         return document
 
-    def delete_document(self, document_id: UUID, user_id: UUID) -> bool:
-        """Delete a document and its file."""
-        document = self.get_document_by_id(document_id, user_id)
-        if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
-
-        # Delete file if exists
-        if os.path.exists(document.file_path):
-            os.remove(document.file_path)
-
-        # Vectors are removed by the async variant (delete_document_async);
-        # this sync version keeps the old contract for non-AI callers.
-        self.db.delete(document)
-        self.db.commit()
-        return True
-
     async def delete_document_async(self, document_id: UUID, user_id: UUID) -> bool:
         """Delete a document, its file, and its stored vectors in Qdrant."""
         document = self.get_document_by_id(document_id, user_id)
@@ -443,20 +423,25 @@ class DocumentService:
                 detail="Document not found"
             )
 
-        # Remove vectors first so the chat can never cite a deleted document.
-        try:
-            await qdrant_store.delete_document(document.id, document.user_id)
-        except Exception:
-            # Qdrant is unavailable: still remove the DB record and file, but
-            # leave the orphaned vectors (they are owned per user and harmless).
-            pass
-
-        if os.path.exists(document.file_path):
-            os.remove(document.file_path)
-
+        await self.purge_storage(document)
         self.db.delete(document)
         self.db.commit()
         return True
+
+    async def purge_storage(self, document: Document) -> None:
+        """Remove everything a document owns outside the DB row: its Qdrant
+        vectors, the uploaded file and its extracted figures directory."""
+        # Vectors first so the chat can never cite a deleted document.
+        try:
+            await qdrant_store.delete_document(document.id, document.user_id)
+        except Exception:
+            # Qdrant is unavailable: still remove the file/figures, leaving the
+            # orphaned vectors (they are owned per user and harmless).
+            pass
+        path = resolve_document_path(document)
+        if os.path.exists(path):
+            os.remove(path)
+        shutil.rmtree(self._figures_dir(document.user_id, document.id), ignore_errors=True)
 
     def get_document_status(self, document_id: UUID, user_id: UUID) -> dict:
         """Get processing status of a document."""

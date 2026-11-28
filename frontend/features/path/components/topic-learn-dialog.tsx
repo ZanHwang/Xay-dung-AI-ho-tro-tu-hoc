@@ -13,25 +13,19 @@ import { downloadDocumentPage } from "@/features/subjects/services/document-api"
  * not by page - and overlapping chunks can report the same page twice. Fine
  * for feeding the AI summary, but confusing once shown as stacked slide
  * images (jumps around, can repeat a page) - reorder by page ascending and
- * drop repeats just for display. Excerpts with no page (non-PDF docs) keep
- * their relative order, placed after every numbered page.
+ * drop repeats just for display. Excerpts with no page are dropped too: with
+ * no slide image to show they were just a bare filename row (the backend
+ * stops storing them for new lessons, but lessons cached earlier still have
+ * them).
  */
 function orderExcerptsForDisplay(excerpts: TopicExcerpt[]): TopicExcerpt[] {
   const seenPages = new Set<string>();
   const unique = excerpts.filter((e) => {
-    if (!e.page) return true;
-    if (seenPages.has(e.page)) return false;
+    if (!e.page || seenPages.has(e.page)) return false;
     seenPages.add(e.page);
     return true;
   });
-  return [...unique].sort((a, b) => {
-    const pa = a.page ? Number(a.page) : null;
-    const pb = b.page ? Number(b.page) : null;
-    if (pa === null && pb === null) return 0;
-    if (pa === null) return 1;
-    if (pb === null) return -1;
-    return pa - pb;
-  });
+  return unique.sort((a, b) => Number(a.page) - Number(b.page));
 }
 
 // Loads the auth-protected page-image endpoint (bearer header, so a plain
@@ -187,6 +181,8 @@ export function TopicLearnDialog({
 
   if (!open) return null;
 
+  const displayExcerpts = lesson ? orderExcerptsForDisplay(lesson.excerpts) : [];
+
   return (
     <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-card">
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
@@ -213,11 +209,11 @@ export function TopicLearnDialog({
           <div className="space-y-4 py-2">
             <MarkdownContent>{lesson.summary}</MarkdownContent>
 
-            {lesson.excerpts.length > 0 ? (
+            {displayExcerpts.length > 0 ? (
               <div>
                 <p className="label" style={{ marginBottom: 8 }}>Trích đoạn gốc trong tài liệu</p>
                 <div className="scroll-list">
-                  {orderExcerptsForDisplay(lesson.excerpts).map((excerpt, index) => (
+                  {displayExcerpts.map((excerpt, index) => (
                     <Excerpt key={index} excerpt={excerpt} documentId={documentId as string} />
                   ))}
                 </div>

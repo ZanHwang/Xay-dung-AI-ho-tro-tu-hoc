@@ -45,7 +45,7 @@ export interface DocumentListResponse {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - must match backend
 // Keep in sync with backend/app/services/document_service.py ALLOWED_EXTENSIONS.
-export const ALLOWED_EXTENSIONS = ["pdf", "docx", "pptx"] as const;
+export const ALLOWED_EXTENSIONS = ["pdf"] as const;
 export type AllowedExtension = (typeof ALLOWED_EXTENSIONS)[number];
 
 // =============================================================================
@@ -112,7 +112,7 @@ export function isAllowedDocument(name: string, size: number): { ok: boolean; re
   if (!ALLOWED_EXTENSIONS.includes(ext as AllowedExtension)) {
     return {
       ok: false,
-      reason: `Định dạng .${ext || "?"} chưa được hỗ trợ. Chỉ chấp nhận: ${ALLOWED_EXTENSIONS.map((e) => `.${e}`).join(", ")}.`,
+      reason: `Định dạng .${ext || "?"} chưa được hỗ trợ. Chỉ nhận PDF — hãy chuyển file Word/PowerPoint sang PDF trước khi tải lên.`,
     };
   }
   return { ok: true };

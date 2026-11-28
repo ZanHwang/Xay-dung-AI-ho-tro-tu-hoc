@@ -21,11 +21,12 @@ import json
 from typing import List, Optional
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from fastapi import HTTPException
 
-from app.models import Subject, Quiz, QuizResult, Document, DocumentStatus, TopicLesson, Conversation, Message
+from app.models import Subject, Quiz, QuizQuestion, QuizResult, Document, DocumentStatus, TopicLesson, Conversation, Message
 from app.ai.llm import llm_manager
 from app.ai.rag import RAGPipeline
 from app.services.quiz_service import QuizService, backfill_document_topics_in_background
@@ -90,13 +91,23 @@ class PathService:
             if not topics:
                 continue
 
+            # Full attempts only: a due-review / retry-wrong session submits
+            # just a few of the quiz's questions (see QuizSubmit.question_ids),
+            # and e.g. 1/1 right must not count as "100%, topic done".
+            question_counts = (
+                self.db.query(QuizQuestion.quiz_id, func.count(QuizQuestion.id).label("n"))
+                .group_by(QuizQuestion.quiz_id)
+                .subquery()
+            )
             rows = (
                 self.db.query(Quiz.topic, QuizResult.correct_count, QuizResult.total_questions, QuizResult.created_at)
                 .join(QuizResult, QuizResult.quiz_id == Quiz.id)
+                .join(question_counts, question_counts.c.quiz_id == Quiz.id)
                 .filter(
                     Quiz.document_id == doc.id,
                     QuizResult.user_id == user_id,
                     Quiz.topic.isnot(None),
+                    QuizResult.total_questions >= question_counts.c.n,
                 )
                 .all()
             )
@@ -226,6 +237,15 @@ class PathService:
             lesson = _new_lesson()
             self.db.add(lesson)
             self.db.commit()
+        except IntegrityError:
+            # A concurrent request (e.g. the same topic open in two tabs)
+            # generated and saved this lesson first - use that one.
+            self.db.rollback()
+            return (
+                self.db.query(TopicLesson)
+                .filter(TopicLesson.document_id == document_id, TopicLesson.topic == topic)
+                .one()
+            )
         self.db.refresh(lesson)
         return lesson
 

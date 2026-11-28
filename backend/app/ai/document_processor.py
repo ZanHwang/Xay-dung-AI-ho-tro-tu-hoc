@@ -6,7 +6,7 @@ page they came from. Scan-only pages (no text layer) are flagged for OCR in
 the service layer. Embedded images large enough to be figures are detected
 here too - the service captions them with the vision model.
 """
-import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -38,20 +38,13 @@ OCR_DPI = 150
 
 
 def extract_text(file_path: str) -> str:
-    """Extract readable text from a stored document file (text layers only).
+    """Extract readable text from a stored PDF (text layers only - uploads are
+    PDF-only, see document_service.ALLOWED_EXTENSIONS).
 
-    Returns an empty string when the format has no reliable text layer
-    (scanned PDFs) - the service layer detects those pages and runs OCR.
+    Returns an empty string when there is no reliable text layer (scanned
+    PDFs) - the service layer detects those pages and runs OCR.
     """
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext == ".pdf":
-        return _extract_pdf(file_path)
-    if ext == ".docx":
-        return _extract_docx(file_path)
-    if ext in (".txt", ".md", ".csv"):
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    return ""
+    return _extract_pdf(file_path)
 
 
 def page_texts(file_path: str) -> List[Tuple[int, str, bool]]:
@@ -209,28 +202,29 @@ def _extract_pdf(file_path: str) -> str:
     return "\n\n".join(parts)
 
 
-def _extract_docx(file_path: str) -> str:
-    try:
-        from docx import Document
-    except ImportError:
-        return ""
-    try:
-        doc = Document(file_path)
-    except Exception:
-        return ""
-    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+_PAGE_MARKER = re.compile(r"\[Trang \d+\]")
 
 
 def chunk_text(text: str) -> List[str]:
-    """Split text into overlapping chunks suitable for embedding."""
+    """Split text into overlapping chunks suitable for embedding.
+
+    Chunks are cut by character count, so most start mid-page with no
+    "[Trang N]" marker of their own; each such chunk is prefixed with the
+    marker of the page it starts on, so every chunk can be cited by page
+    (see RAGPipeline._page_of, which reads the last marker in a chunk).
+    """
     text = text.strip()
     if not text:
         return []
+    markers = [(m.start(), m.group()) for m in _PAGE_MARKER.finditer(text)]
     chunks: List[str] = []
     start = 0
     while start < len(text):
         end = start + CHUNK_SIZE
         chunk = text[start:end]
+        current = next((label for pos, label in reversed(markers) if pos <= start), None)
+        if current and not chunk.lstrip().startswith("[Trang "):
+            chunk = f"{current}\n{chunk}"
         if chunk.strip():
             chunks.append(chunk)
         if end >= len(text):

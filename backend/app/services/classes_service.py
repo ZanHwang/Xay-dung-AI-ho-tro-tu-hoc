@@ -105,10 +105,15 @@ class ClassService:
             self.db.commit()
         return self._out(room)
 
-    def members(self, class_id: UUID) -> List[dict]:
-        room = self.db.query(ClassRoom).filter(ClassRoom.id == class_id).first()
+    def members(self, class_id: UUID, teacher_id: UUID) -> List[dict]:
+        """Members with their emails - only for the class's own teacher."""
+        room = (
+            self.db.query(ClassRoom)
+            .filter(ClassRoom.id == class_id, ClassRoom.teacher_id == teacher_id)
+            .first()
+        )
         if not room:
-            raise HTTPException(status_code=404, detail="Không tìm thấy lớp")
+            raise HTTPException(status_code=404, detail="Không tìm thấy lớp hoặc không phải lớp của bạn")
         return [
             {"id": m.id, "name": m.full_name, "email": m.email, "role": m.role}
             for m in self._members(class_id)

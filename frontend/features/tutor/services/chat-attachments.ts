@@ -1,7 +1,10 @@
 import { addSubjectDocuments } from "@/features/subjects/services/document.service";
 import { CHAT_IMAGES_GROUP, MAX_IMAGE_BYTES, validateChatImages } from "./chat-images";
 
-export const DOCUMENT_ACCEPT = ".pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx";
+// PDF only - document attachments are uploaded + indexed through the same
+// backend pipeline as subject documents (see document-api.ts), which only
+// accepts PDF; anything else used to be silently dropped from the answer.
+export const DOCUMENT_ACCEPT = ".pdf";
 const extensions = new Set(DOCUMENT_ACCEPT.split(","));
 export function validateChatAttachments(files: File[]) {
   if (files.length > 4) throw new Error("Mỗi tin nhắn tối đa 4 tệp (ảnh hoặc tài liệu).");
@@ -9,7 +12,7 @@ export function validateChatAttachments(files: File[]) {
   for (const file of files) {
     if (!file.size || file.size > MAX_IMAGE_BYTES) throw new Error(`Tệp “${file.name}” phải có dung lượng từ 1 byte đến 10 MB.`);
     if (!file.type.startsWith("image/") && !extensions.has(file.name.slice(file.name.lastIndexOf(".")).toLowerCase())) {
-      throw new Error("Chọn ảnh JPG/PNG/WebP hoặc tài liệu PDF, TXT, MD, Word, PowerPoint, Excel.");
+      throw new Error("Chọn ảnh JPG/PNG/WebP hoặc tài liệu PDF (Word/PowerPoint hãy xuất sang PDF trước).");
     }
   }
 }

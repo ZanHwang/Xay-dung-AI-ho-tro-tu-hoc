@@ -28,6 +28,5 @@ python-dotenv==1.0.0
 # Document processing & RAG
 PyMuPDF==1.26.0        # page-accurate PDF text, embedded figures, page render
 pypdf==6.10.0          # PDF fallback when PyMuPDF is unavailable
-python-docx==1.2.0     # .docx text extraction
 qdrant-client          # Qdrant vector store client
 openai>=1.0.0          # OpenAI chat + vision (gpt-4o-mini) - LLM & RAG vision

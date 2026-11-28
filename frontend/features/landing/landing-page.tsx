@@ -7,7 +7,7 @@ import {
 // feature xen kẽ (RAG / nhắc ôn / barem / quiz), preview 10 môn, bảng giá,
 // CTA band. Dùng lớp v2 thuần — không Tailwind hardcoded màu.
 const steps = [
-  { num: "1", title: "Đẩy tài liệu lên", desc: "Tải PDF, Word hoặc dán ghi chép. TuHoc chia theo chương và lập chỉ mục để hỏi đáp ngay." },
+  { num: "1", title: "Đẩy tài liệu lên", desc: "Tải tài liệu PDF hoặc dán ghi chép. TuHoc chia theo chương và lập chỉ mục để hỏi đáp ngay." },
   { num: "2", title: "Học theo lộ trình", desc: "Mỗi chương thành một đường đi gồm các bài 5 phút. Làm xong bài này mới mở bài sau." },
   { num: "3", title: "Được chấm và nhắc ôn", desc: "Quiz ra điểm và giải thích ngay. Tự luận chấm theo barem; câu sai (và cả câu đúng) được nhắc ôn lại sau 1, 3, 7 ngày." },
 ];
