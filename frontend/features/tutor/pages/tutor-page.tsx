@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { Subject } from "@/features/subjects/types";
+import { searchKey, type Subject } from "@/features/subjects/types";
 import { ChatMessage } from "@/features/tutor/components/chat-message";
 import type { ConversationsController } from "../hooks/use-conversations";
 import { ChatImageView } from "../components/chat-image";
@@ -33,7 +33,18 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
   const draftSubject = subjects.find((subject) => subject.id === chats.draftSubjectId);
   const subjectName = (id: string | null) => id === null ? "Hỏi đáp chung"
     : subjects.find((subject) => subject.id === id)?.name ?? "Môn học không còn tồn tại";
-  const conversations = [...chats.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const [query, setQuery] = useState("");
+  const wanted = searchKey(query);
+  const conversations = [...chats.conversations]
+    .filter((conversation) => !wanted || searchKey(conversation.title).includes(wanted))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // Older conversations not fetched yet: ask the server too, shortly after typing stops.
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    const timer = window.setTimeout(() => void chats.search(query), 350);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
   const coverClass = (id: string | null | undefined) => {
     const accent = subjects.find((subject) => subject.id === id)?.accent;
     return accent ? `cover-${accent}` : "";
@@ -87,7 +98,19 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
           <button type="button" className="btn btn-accent" disabled={!chats.ready} onClick={() => chats.store.startNew()}>
             <Plus className="size-5" aria-hidden="true" /> Hội thoại mới
           </button>
-          {!chats.ready ? <p className="meta">Đang tải lịch sử...</p> : conversations.length === 0 ? <p className="meta">Chưa có cuộc hội thoại.</p> : null}
+          {chats.ready && chats.conversations.length > 0 ? (
+            <input
+              type="search"
+              className="input list-search-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Tìm hội thoại"
+              aria-label="Tìm hội thoại theo tên"
+            />
+          ) : null}
+          {!chats.ready ? <p className="meta">Đang tải lịch sử...</p>
+            : conversations.length === 0 ? <p className="meta" role="status">{wanted ? "Không có cuộc hội thoại nào khớp." : "Chưa có cuộc hội thoại."}</p>
+            : null}
           {conversations.map((conversation) => (
             <button
               type="button"
@@ -105,6 +128,11 @@ export function TutorPage({ subjects, chats, onCreateQuiz, isVisible }: Props) {
               </span>
             </button>
           ))}
+          {chats.hasMore && !wanted ? (
+            <button type="button" className="btn btn-outline btn-sm load-more" disabled={chats.loadingMore} onClick={() => void chats.loadMore()}>
+              {chats.loadingMore ? "Đang tải…" : "Tải thêm hội thoại cũ"}
+            </button>
+          ) : null}
         </aside>
 
         <section className="min-w-0 chat-main" aria-label="Nội dung hội thoại">

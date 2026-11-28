@@ -17,8 +17,13 @@ import { SubjectsPage } from "@/features/subjects/pages/subjects-page";
 import { TutorPage } from "@/features/tutor/pages/tutor-page";
 import { EssayPage } from "@/features/essay/pages/essay-page";
 import { ClassesPage } from "@/features/classes/pages/classes-page";
+import { GradesPage } from "@/features/grades/pages/grades-page";
 import { useConversations } from "@/features/tutor/hooks/use-conversations";
 import { useLearningWorkspace } from "@/features/workspace/hooks/use-learning-workspace";
+
+/** Pages a subject can be opened from, and how its back button names them. */
+type SubjectOrigin = "dashboard" | "subjects" | "tutor";
+const BACK_LABEL: Record<SubjectOrigin, string> = { dashboard: "Hôm nay", subjects: "Môn học", tutor: "Hỏi AI" };
 
 export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLogout: () => void }) {
   const chats = useConversations(user.id);
@@ -28,8 +33,11 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
   const workspace = useLearningWorkspace(chats.store.startNew);
   // Which tab a subject opens on ("Mở lộ trình" goes straight to Lộ trình).
   const [subjectTab, setSubjectTab] = useState<SubjectTab>("documents");
-  const openSubject = (id: string, tab: SubjectTab = "documents") => {
+  // Where the subject was opened from: its back button leads there.
+  const [subjectFrom, setSubjectFrom] = useState<SubjectOrigin>("dashboard");
+  const openSubject = (id: string, tab: SubjectTab = "documents", from: SubjectOrigin = "dashboard") => {
     setSubjectTab(tab);
+    setSubjectFrom(from);
     workspace.openSubject(id);
   };
 
@@ -99,7 +107,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               isVisible={true}
               subjects={workspace.subjects}
               chats={chats}
-              onCreateQuiz={(subjectId) => subjectId ? openSubject(subjectId) : workspace.navigate("subjects")}
+              onCreateQuiz={(subjectId) => subjectId ? openSubject(subjectId, "documents", "tutor") : workspace.navigate("subjects")}
             />
           ) : null}
           {workspace.activePage === "subjects" ? (
@@ -108,11 +116,13 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               subjects={workspace.subjects}
               selectedSubject={workspace.selectedSubject}
               initialTab={subjectTab}
+              backLabel={BACK_LABEL[subjectFrom]}
               onBack={() => {
                 workspace.clearSelectedSubject();
-                workspace.navigate("dashboard");
+                if (subjectFrom !== "subjects") workspace.navigate(subjectFrom, subjectFrom === "tutor");
               }}
-              onOpen={openSubject}
+              onHome={() => workspace.navigate("dashboard")}
+              onOpen={(id) => openSubject(id, "documents", "subjects")}
               onCreate={workspace.addSubject}
               onUpdate={workspace.updateSubject}
               onDelete={workspace.deleteSubject}
@@ -120,6 +130,14 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
                 chats.store.startNew(id);
                 workspace.navigate("tutor", true);
               }}
+            />
+          ) : null}
+          {workspace.activePage === "grades" ? (
+            <GradesPage
+              subjects={workspace.subjects}
+              quizzes={quizzes}
+              onViewQuiz={overlay.open}
+              onBack={() => workspace.navigate("dashboard")}
             />
           ) : null}
           {workspace.activePage === "settings" ? <SettingsPage profile={user} /> : null}

@@ -25,6 +25,8 @@ type SubjectDetailProps = {
   initialTab?: SubjectTab;
   quizzes: QuizController;
   subject: Subject;
+  /** Where the back button leads, e.g. "Hôm nay" or "Môn học". */
+  backLabel?: string;
   onBack: () => void;
   onAskTutor: (id: string) => void;
   onUpdate: (id: string, data: UpdateSubjectInput) => Promise<void>;
@@ -40,7 +42,7 @@ const TABS: { key: SubjectTab; label: string }[] = [
 // The subject's notebook cover heads the page; its index tabs switch between
 // Tài liệu | Lộ trình | Quiz. Each document row in SubjectDocuments has its own
 // "Đọc" button, so there is no separate reading tab.
-export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete, quizzes, initialTab = "documents" }: SubjectDetailProps) {
+export function SubjectDetail({ subject, backLabel = "Hôm nay", onBack, onAskTutor, onUpdate, onDelete, quizzes, initialTab = "documents" }: SubjectDetailProps) {
   const [activeTab, setActiveTab] = useState<SubjectTab>(initialTab);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -85,7 +87,7 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
   return (
     <div className="page">
       <button type="button" onClick={onBack} className="link-btn mb-3 gap-2">
-        <ArrowLeft className="size-4" aria-hidden="true" /> Hôm nay
+        <ArrowLeft className="size-4" aria-hidden="true" /> {backLabel}
       </button>
 
       <div className={`subj-cover cover-${subject.accent}`}>

@@ -10,7 +10,7 @@ import {
 import type { NavKey } from "@/features/workspace/types";
 import { uploadDocument } from "@/features/subjects/services/document-api";
 
-const validPages: NavKey[] = ["dashboard", "tutor", "subjects", "settings", "essay", "classes"];
+const validPages: NavKey[] = ["dashboard", "tutor", "subjects", "grades", "settings", "essay", "classes"];
 
 // The open tab lives in the URL hash (/workspace#tutor). The hash is purely
 // client-side - the server only ever renders /workspace - so it dodges the
@@ -116,6 +116,20 @@ export function useLearningWorkspace(onTutorEnter: () => void) {
     subjectsRef.current = subjects;
   }, [subjects]);
 
+  // Coming back to Hôm nay or Môn học: fetch the list again, quietly, so the
+  // "used most recently" order (stats.last_activity) catches up with what was
+  // just studied. A failure keeps the list already shown.
+  const firstPage = useRef(true);
+  useEffect(() => {
+    if (firstPage.current) { firstPage.current = false; return; }
+    if (isDemo || (activePage !== "dashboard" && activePage !== "subjects")) return;
+    let disposed = false;
+    subjectApi.list()
+      .then((list) => { if (!disposed) setSubjects(list); })
+      .catch(() => undefined);
+    return () => { disposed = true; };
+  }, [activePage, isDemo]);
+
   // Selection only matters on the subjects tab: navigating away (via the
   // back button or a sidebar tab) is a URL change, so we derive the visible
   // subject from the active tab instead of a state-clearing effect.
@@ -159,7 +173,7 @@ export function useLearningWorkspace(onTutorEnter: () => void) {
         accent: input.color ? colorToAccent(input.color) : "emerald",
       };
 
-      const next = [...subjectsRef.current, newSubject];
+      const next = [newSubject, ...subjectsRef.current];
       subjectsRef.current = next;
       setSubjects(next);
       return newSubject;
@@ -168,7 +182,8 @@ export function useLearningWorkspace(onTutorEnter: () => void) {
     // Create via API
     try {
       const subject = await subjectApi.create(input);
-      const next = [...subjectsRef.current, subject];
+      // First: a new subject leads the list until the next reload.
+      const next = [subject, ...subjectsRef.current];
       subjectsRef.current = next;
       setSubjects(next);
 

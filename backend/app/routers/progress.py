@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from uuid import UUID
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.schemas.progress import DashboardResponse
+from app.schemas.progress import DashboardResponse, ResultListResponse
 from app.schemas.review import DueQuizzesResponse, DueQuizSummary
 from app.services.progress_service import ProgressService
 from app.utils.security import get_current_user
@@ -57,3 +59,16 @@ async def get_dashboard(
     """
     data = service.get_dashboard_data(current_user.id)
     return DashboardResponse(**data)
+
+
+@router.get("/results", response_model=ResultListResponse)
+def get_results(
+    subject_id: Optional[UUID] = Query(None, description="Only this subject's quizzes"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    service: ProgressService = Depends(get_progress_service),
+):
+    """Every quiz submission of the current user, newest first ("Sổ điểm")."""
+    total, results = service.get_results(current_user.id, subject_id, limit, offset)
+    return ResultListResponse(total=total, results=results)

@@ -26,6 +26,8 @@ class ConversationResponse(ConversationBase):
     updated_at: datetime
     last_message: Optional[str] = None
     message_count: int = 0
+    # Set for the Q&A of one Lộ trình topic ("Học" screen), None otherwise.
+    topic: Optional[str] = None
 
     class Config:
         from_attributes = True

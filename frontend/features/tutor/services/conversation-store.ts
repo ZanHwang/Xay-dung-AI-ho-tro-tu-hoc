@@ -10,6 +10,7 @@ const conversationSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   messageCount: z.number().int().nonnegative().optional(),
+  topic: z.string().nullable().optional(),
   messages: z.array(z.object({
     id: z.string().min(1),
     role: z.enum(["user", "assistant"]),
@@ -181,6 +182,15 @@ export function createConversationStore(getStorage: StorageAccess, userId?: stri
         save({ ...state,
           conversations: state.conversations.map((item) => item.id === conversation.id
             ? { ...item, ...conversation, messages: item.messages }
+            : item),
+        });
+        return;
+      }
+      // Copies saved before conversations carried their lesson topic.
+      if ((local.topic ?? null) !== (conversation.topic ?? null)) {
+        save({ ...state,
+          conversations: state.conversations.map((item) => item.id === conversation.id
+            ? { ...item, topic: conversation.topic ?? null }
             : item),
         });
       }

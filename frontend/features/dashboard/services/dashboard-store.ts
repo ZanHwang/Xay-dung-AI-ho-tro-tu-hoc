@@ -3,21 +3,30 @@ import { httpClient } from "@/services/http-client";
 // Mirrors the backend's trimmed DashboardResponse (app/schemas/progress.py) —
 // "Chủ đề"/Progress/Weakness were removed, so recent_weaknesses/subjects_progress
 // no longer exist here. Canonical definition - use-dashboard.ts re-exports it.
+/** One quiz submission (backend ResultRow, app/schemas/progress.py). */
+export interface ResultRow {
+  // QuizResult.id (one past submission) - matches a local QuizAttempt's
+  // backendResultId once synced (see quiz-store.ts::mergeFromServer).
+  id: string;
+  // Quiz.id - matches a local Quiz.backendId once synced.
+  quiz_id: string;
+  title: string | null;
+  subject_id?: string | null;
+  score: number;
+  correct_count?: number;
+  total_questions?: number;
+  /** Only part of the quiz was answered: a review of due questions or a retry of the wrong ones. */
+  partial?: boolean;
+  created_at: string;
+}
+
 export interface DashboardData {
   total_subjects: number;
   total_quizzes: number;
   total_questions_answered: number;
   avg_score: number;
-  recent_quizzes: Array<{
-    // QuizResult.id (one past submission) - matches a local QuizAttempt.id
-    // once synced (see quiz-store.ts::mergeFromServer).
-    id: string;
-    // Quiz.id - matches a local Quiz.backendId once synced.
-    quiz_id: string;
-    title: string;
-    score: number;
-    created_at: string;
-  }>;
+  /** The 5 quizzes worked on most recently, each with its latest submission. */
+  recent_quizzes: ResultRow[];
 }
 
 // =============================================================================

@@ -22,6 +22,20 @@ class DocumentTopicGroup(BaseModel):
     topics: List[TopicProgress]
 
 
+class ContinueRoad(DocumentTopicGroup):
+    """One document's Lộ trình and the topic to continue in it."""
+    subject_id: UUID
+    topic: str
+
+
+class ContinueTopicResponse(BaseModel):
+    """The "Học tiếp" card and the roads shown on Hôm nay - see
+    PathService.continue_topic."""
+    next: Optional[ContinueRoad] = None
+    others: List[ContinueRoad] = []
+    state: str  # ready | no_documents | preparing | finished
+
+
 class TopicExcerpt(BaseModel):
     document_name: str
     page: Optional[str] = None

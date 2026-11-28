@@ -34,6 +34,7 @@ def get_conversations(
     subject_id: Optional[UUID] = Query(None, description="Filter by subject"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(None, max_length=120, description="Only titles containing this"),
     current_user: User = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service)
 ):
@@ -41,7 +42,7 @@ def get_conversations(
     Get all conversations for the current user.
     """
     conversations, total = service.get_conversations_by_user(
-        current_user.id, subject_id, limit, offset
+        current_user.id, subject_id, limit, offset, search=q
     )
 
     conversation_responses = service.get_conversations_with_last_message(conversations)

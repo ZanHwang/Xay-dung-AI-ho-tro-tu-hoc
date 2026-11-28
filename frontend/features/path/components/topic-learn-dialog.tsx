@@ -128,7 +128,15 @@ export function TopicLearnDialog({
     setError("");
     setChat([]);
     pathApi.getLesson(subjectId, documentId, topic)
-      .then((data) => { if (!cancelled) setLesson(data); })
+      .then((data) => {
+        if (cancelled) return;
+        setLesson(data);
+        // Reading a lesson counts as studying this document ("Học tiếp");
+        // looking something up after a wrong answer ("review") does not.
+        if (mode === "full") {
+          pathApi.markStudied(subjectId, documentId).catch(() => { /* only affects what is suggested next */ });
+        }
+      })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Không tải được nội dung học."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     if (mode === "full") {
@@ -167,6 +175,8 @@ export function TopicLearnDialog({
       const id = quizzes.store.create({
         subjectId, title: quiz.title, difficulty: quiz.difficulty,
         source: "shared", conversationId: null, questions: quiz.questions, backendId: quiz.backendId,
+        // Needed for "Xem lại kiến thức" on a wrong answer of this quiz.
+        documentId,
       });
       onPracticeCreated?.(id);
     } catch (err) {

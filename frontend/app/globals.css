@@ -507,7 +507,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 .dash-block { margin-top: 34px; min-width: 0; }
 .block-head { display: flex; align-items: center; justify-content: space-between; gap: 4px 14px; flex-wrap: wrap; margin-bottom: 8px; }
-.block-head .sub { margin-right: auto; }
+.block-head .sub { margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
 .row-link {
   display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 8px 4px;
   border: 0; border-bottom: 1px solid var(--rule); background: none; text-align: left;
@@ -516,6 +516,19 @@ textarea.input { min-height: 96px; resize: vertical; }
 .row-link:hover { background: var(--surface-2); }
 .row-link .grow { flex: 1; min-width: 0; }
 .row-link .title, .row-link .sub2 { display: block; }
+/* lượt ôn vài câu: ghi số câu đúng thay cho điểm khoanh */
+.score-note { flex: none; max-width: 40%; font-size: 15px; font-weight: 700; color: var(--ink-2); text-align: right; }
+/* chọn lộ trình khác */
+.road-pick { margin-bottom: 12px; }
+.road-pick .choice { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* sổ điểm, ô tìm */
+.grades-page { max-width: 880px; }
+.grades-tools { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.grades-tools .lbl { min-width: min(100%, 280px); }
+.list-search { max-width: 420px; margin-bottom: var(--space-4); }
+.list-search .meta { margin-top: 6px; }
+.chat-side > .list-search-input { flex: none; margin-bottom: 8px; }
+.chat-side > .load-more { margin: 8px 0 0; }
 /* vạch màu của môn */
 .spine-dot { width: 12px; height: 38px; flex: none; border-radius: 4px; background: var(--spine, var(--border-strong)); }
 
@@ -730,6 +743,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   font: inherit; font-size: 15px; color: var(--ink); cursor: pointer;
 }
 .attempt-chip b { color: var(--red); font-family: var(--font-hand); font-weight: 400; font-size: 19px; }
+.attempt-chip .attempt-review { font-weight: 700; color: var(--ink-2); }
 .attempt-chip:hover { border-color: var(--accent); }
 .attempt-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 .q-card { min-width: 0; padding: 18px 20px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }

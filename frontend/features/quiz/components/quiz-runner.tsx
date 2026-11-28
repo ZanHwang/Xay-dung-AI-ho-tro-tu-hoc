@@ -9,6 +9,16 @@ import { quizApi } from "../services/quiz-api";
 import { gradeQuiz } from "../services/quiz-engine";
 import { TopicLearnDialog } from "@/features/path/components/topic-learn-dialog";
 
+/** Past attempts shown before "Xem tất cả". */
+const VISIBLE_ATTEMPTS = 6;
+
+/** Date of a submission, with the time when another one was made the same day. */
+function attemptLabel(submittedAt: string, withTime: boolean) {
+  const date = new Date(submittedAt);
+  const day = date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return withTime ? `${day} ${date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : day;
+}
+
 type QuizRunnerProps = {
   quiz: Quiz;
   quizzes: QuizController;
@@ -57,6 +67,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   // without the parent having to know about it.
   const autoStartNextSwitch = useRef(false);
   const sheetRef = useRef<HTMLElement>(null);
+  const [showAllAttempts, setShowAllAttempts] = useState(false);
 
   const draft = quizzes.drafts.find((item) => item.quizId === quiz.id);
   const attempt = quizzes.attempts.find((item) => item.id === attemptId && item.quizId === quiz.id);
@@ -65,6 +76,37 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   const pastAttempts = [...quizzes.attempts]
     .filter((item) => item.quizId === quiz.id)
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const perDay = new Map<string, number>();
+  for (const item of pastAttempts) {
+    const day = new Date(item.submittedAt).toDateString();
+    perDay.set(day, (perDay.get(day) ?? 0) + 1);
+  }
+  const selectedIndex = pastAttempts.findIndex((item) => item.id === attemptId);
+  const shownAttempts = showAllAttempts ? pastAttempts : pastAttempts.slice(0, VISIBLE_ATTEMPTS);
+
+  // The browser holds only the most recent submissions of all quizzes (see
+  // use-quizzes.ts): fetch this quiz's own history so older attempts show too.
+  const backendId = quiz.backendId;
+  useEffect(() => {
+    if (!backendId || quizzes.isDemoMode) return;
+    let disposed = false;
+    quizApi.getResults(backendId, { limit: 100 })
+      .then((page) => { if (!disposed) quizzes.store.mergeFromServer([], page.results); })
+      .catch(() => { /* the attempts already here still show */ });
+    return () => { disposed = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendId]);
+
+  // Another quiz: start with the short list again. Declared before the
+  // effect below, which runs after it and may open the list right back up.
+  useEffect(() => {
+    setShowAllAttempts(false);
+  }, [quiz.id]);
+
+  // An older attempt being looked at (e.g. opened from Sổ điểm) stays visible.
+  useEffect(() => {
+    if (selectedIndex >= VISIBLE_ATTEMPTS) setShowAllAttempts(true);
+  }, [selectedIndex]);
 
   function start() {
     quizzes.store.start(quiz.id);
@@ -175,8 +217,10 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
       {!taking && pastAttempts.length > 1 ? (
         <div className="attempts">
           <span className="meta">Các lần đã làm:</span>
-          {pastAttempts.map((item) => {
+          {shownAttempts.map((item) => {
             const grade = gradeQuiz(quiz, item.answers, item.questionIds);
+            // Only part of the quiz: a review of due questions or a retry of the wrong ones.
+            const partial = (item.questionIds?.length ?? quiz.questions.length) < quiz.questions.length;
             return (
               <button
                 key={item.id}
@@ -185,11 +229,16 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
                 aria-pressed={item.id === attemptId}
                 onClick={() => { setAttemptId(item.id); setTaking(false); setWrongOnly(false); }}
               >
-                <span>{new Date(item.submittedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}</span>
-                <b>{grade.percent}%</b>
+                <span>{attemptLabel(item.submittedAt, (perDay.get(new Date(item.submittedAt).toDateString()) ?? 0) > 1)}</span>
+                {partial ? <span className="attempt-review">Ôn {grade.total} câu: {grade.correct}/{grade.total}</span> : <b>{grade.percent}%</b>}
               </button>
             );
           })}
+          {pastAttempts.length > VISIBLE_ATTEMPTS ? (
+            <button type="button" className="link-btn" aria-expanded={showAllAttempts} onClick={() => setShowAllAttempts((value) => !value)}>
+              {showAllAttempts ? "Thu gọn" : `Xem tất cả ${pastAttempts.length} lần`}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

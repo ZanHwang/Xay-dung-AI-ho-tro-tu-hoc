@@ -13,6 +13,9 @@ import type { ChatImage, ChatMessage, Conversation, MessageSource } from "../typ
  * @param userId Scopes the localStorage key so chat history doesn't leak
  * between accounts sharing the same browser (see createConversationStore).
  */
+/** Conversations fetched from the server at a time. */
+const PAGE = 50;
+
 export function useConversations(userId: string) {
   const store = useMemo(() => createConversationStore(() => window.localStorage, userId), [userId]);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -20,6 +23,11 @@ export function useConversations(userId: string) {
   const submittedDraft = useRef<number | null>(null);
   const [pending, setPending] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // How many conversations the server has, and how many of them (newest
+  // first) have been fetched: "Tải thêm" asks for the next page.
+  const [serverTotal, setServerTotal] = useState(0);
+  const [serverLoaded, setServerLoaded] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Check if we should use API mode
   const isDemoMode = typeof window !== "undefined" &&
@@ -37,13 +45,43 @@ export function useConversations(userId: string) {
 
   async function loadConversations() {
     try {
-      const result = await chatApi.listConversations();
+      const result = await chatApi.listConversations({ limit: PAGE });
       // Upsert each server conversation. A server row only carries metadata
       // + message_count, so it must NOT wipe the local messages that the
       // user already has in this tab; it only fills in what's missing.
       result.conversations.forEach((conv) => store.mergeConversation(conv));
+      setServerTotal(result.total);
+      setServerLoaded((count) => Math.max(count, result.conversations.length));
     } catch (err) {
       console.error("Failed to load conversations:", err);
+    }
+  }
+
+  /** The next page of older conversations from the server. */
+  async function loadMore() {
+    if (isDemoMode || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const result = await chatApi.listConversations({ limit: PAGE, offset: serverLoaded });
+      result.conversations.forEach((conv) => store.mergeConversation(conv));
+      setServerTotal(result.total);
+      setServerLoaded((count) => count + result.conversations.length);
+    } catch (err) {
+      console.error("Failed to load more conversations:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  /** Conversations on the server whose title contains `query`, added to the
+   * list so older ones not fetched yet can be found too. Best-effort. */
+  async function search(query: string) {
+    if (isDemoMode || !query.trim()) return;
+    try {
+      const result = await chatApi.listConversations({ q: query.trim(), limit: PAGE });
+      result.conversations.forEach((conv) => store.mergeConversation(conv));
+    } catch (err) {
+      console.error("Failed to search conversations:", err);
     }
   }
 
@@ -233,6 +271,8 @@ export function useConversations(userId: string) {
 
   return {
     ...state, store, pending, errors, send, remove, loadMessages,
+    loadMore, search, loadingMore,
+    hasMore: !isDemoMode && serverLoaded < serverTotal,
     // Re-fetch the conversation list from the backend - `loadConversations`
     // otherwise only ever runs once, on this hook's own mount (which, since
     // it's instantiated once at LearningWorkspace and never remounts, means

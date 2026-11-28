@@ -42,6 +42,7 @@ function mapApiSubject(api: ApiSubject): Subject {
     lastStudied: api.stats?.last_activity
       ? new Date(api.stats.last_activity).toLocaleDateString("vi-VN")
       : "Chưa học",
+    lastActivityAt: api.stats?.last_activity ?? null,
     accent,
     currentTopic: undefined, // TODO: Get from user's current topic setting
     documentCount: api.stats?.total_documents,

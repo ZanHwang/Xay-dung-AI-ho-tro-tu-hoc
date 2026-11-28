@@ -28,7 +28,8 @@ export function AppSidebar({ user, onLogout, activePage, onNavigate }: Props) {
   // The due-review count stays visible on every page, next to "Hôm nay" where
   // the review button is.
   const { total: dueTotal } = useDueReviews();
-  const current = activePage === "subjects" ? "dashboard" : activePage;
+  // Môn học and Sổ điểm are opened from Hôm nay and have no item of their own.
+  const current = activePage === "subjects" || activePage === "grades" ? "dashboard" : activePage;
 
   const profileMenu = (compact: boolean) => (
     <DropdownMenu modal={false}>

@@ -14,13 +14,18 @@ class ConversationService:
         self.db = db
 
     def get_conversations_by_user(
-        self, user_id: UUID, subject_id: Optional[UUID] = None, limit: int = 50, offset: int = 0
+        self, user_id: UUID, subject_id: Optional[UUID] = None, limit: int = 50, offset: int = 0,
+        search: Optional[str] = None,
     ) -> Tuple[List[Conversation], int]:
-        """Get all conversations for a user."""
+        """Get all conversations for a user, optionally only those whose
+        title contains `search` (case-insensitive)."""
         query = self.db.query(Conversation).filter(Conversation.user_id == user_id)
 
         if subject_id:
             query = query.filter(Conversation.subject_id == subject_id)
+        if search and search.strip():
+            pattern = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.filter(Conversation.title.ilike(f"%{pattern}%", escape="\\"))
 
         total = query.count()
         conversations = (
@@ -203,6 +208,7 @@ class ConversationService:
             "id": conversation.id,
             "user_id": conversation.user_id,
             "subject_id": conversation.subject_id,
+            "topic": conversation.topic,
             "title": conversation.title,
             "created_at": conversation.created_at,
             # Some rows (written before the onupdate default landed, or via a
@@ -244,6 +250,7 @@ class ConversationService:
                 "id": c.id,
                 "user_id": c.user_id,
                 "subject_id": c.subject_id,
+                "topic": c.topic,
                 "title": c.title,
                 "created_at": c.created_at,
                 "updated_at": c.updated_at or c.created_at,

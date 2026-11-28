@@ -38,6 +38,52 @@ interface ApiDocumentTopicGroup {
   topics: ApiTopicProgress[];
 }
 
+/** What "Học tiếp" offers: one document's Lộ trình and the topic to continue. */
+export interface ContinueTopic extends DocumentTopicGroup {
+  subjectId: string;
+  /** The topic marked "current" in that document's Lộ trình. */
+  topic: string;
+}
+
+/** Why there is nothing to continue - see PathService.continue_topic. */
+export type ContinueState = "ready" | "no_documents" | "preparing" | "finished";
+
+/** What Hôm nay shows: the topic to continue, a few other roads, and why
+ * there is none when there isn't. */
+export interface ContinueHome {
+  next: ContinueTopic | null;
+  others: ContinueTopic[];
+  state: ContinueState;
+}
+
+interface ApiContinueTopic extends ApiDocumentTopicGroup {
+  subject_id: string;
+  topic: string;
+}
+
+interface ApiContinueHome {
+  next: ApiContinueTopic | null;
+  others: ApiContinueTopic[];
+  state: ContinueState;
+}
+
+function mapRoad(api: ApiContinueTopic): ContinueTopic {
+  return { ...mapGroup(api), subjectId: api.subject_id, topic: api.topic };
+}
+
+function mapGroup(group: ApiDocumentTopicGroup): DocumentTopicGroup {
+  return {
+    documentId: group.document_id,
+    documentName: group.document_name,
+    topics: group.topics.map((r) => ({
+      topic: r.topic,
+      state: r.state as TopicProgress["state"],
+      bestPercent: r.best_percent,
+      recentPercent: r.recent_percent,
+    })),
+  };
+}
+
 export interface TopicExcerpt {
   documentName: string;
   page: string | null;
@@ -65,16 +111,21 @@ export const pathApi = {
   /** One group per document, each with its own ordered topic list. */
   async topics(subjectId: string): Promise<DocumentTopicGroup[]> {
     const rows = await httpClient.get<ApiDocumentTopicGroup[]>(`/subjects/${subjectId}/path/topics`);
-    return rows.map((g) => ({
-      documentId: g.document_id,
-      documentName: g.document_name,
-      topics: g.topics.map((r) => ({
-        topic: r.topic,
-        state: r.state as TopicProgress["state"],
-        bestPercent: r.best_percent,
-        recentPercent: r.recent_percent,
-      })),
-    }));
+    return rows.map(mapGroup);
+  },
+
+  /** The topic to continue across all subjects (the most recently studied
+   * document that still has one), up to 3 other roads, and why there is
+   * nothing to continue when there isn't. */
+  async continueTopic(): Promise<ContinueHome> {
+    const api = await httpClient.get<ApiContinueHome>("/subjects/path/continue");
+    return { next: api.next ? mapRoad(api.next) : null, others: api.others.map(mapRoad), state: api.state };
+  },
+
+  /** Remember (server side, so every device agrees) that a "Học" lesson of
+   * this document was just opened. */
+  async markStudied(subjectId: string, documentId: string): Promise<void> {
+    await httpClient.post(`/subjects/${subjectId}/path/documents/${documentId}/visit`, {});
   },
 
   /** Cached "Học" content for one (document, topic) pair. */

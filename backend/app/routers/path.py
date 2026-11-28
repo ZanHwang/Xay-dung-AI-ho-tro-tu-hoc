@@ -1,12 +1,12 @@
 """Learning path (lộ trình) endpoints, nested under /api/subjects."""
 import json
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.path import DocumentTopicGroup, TopicLessonResponse
+from app.schemas.path import ContinueTopicResponse, DocumentTopicGroup, TopicLessonResponse
 from app.schemas.quiz import QuizWithQuestionsResponse
 from app.schemas.conversation import ChatRequest, ChatResponse, MessageResponse
 from app.services.path_service import PathService
@@ -29,6 +29,28 @@ def get_quiz_service(db: Session = Depends(get_db)) -> QuizService:
 
 def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
     return ChatService(db)
+
+
+@router.get("/path/continue", response_model=ContinueTopicResponse)
+async def get_continue_topic(
+    current_user: User = Depends(get_current_user),
+    service: PathService = Depends(get_path_service),
+):
+    """The topic "Học tiếp" offers across all subjects, a few other roads,
+    and why there is nothing to continue (see PathService.continue_topic).
+    Async: it may start a background topic backfill on the event loop."""
+    return service.continue_topic(current_user.id)
+
+
+@router.post("/{subject_id}/path/documents/{document_id}/visit", status_code=status.HTTP_204_NO_CONTENT)
+def mark_document_studied(
+    subject_id: UUID,
+    document_id: UUID,
+    current_user: User = Depends(get_current_user),
+    service: PathService = Depends(get_path_service),
+):
+    """Called when the user opens a "Học" lesson of this document."""
+    service.mark_studied(subject_id, current_user.id, document_id)
 
 
 @router.get("/{subject_id}/path/topics", response_model=list[DocumentTopicGroup])

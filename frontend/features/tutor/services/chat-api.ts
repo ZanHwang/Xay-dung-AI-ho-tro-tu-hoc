@@ -27,6 +27,7 @@ function mapConversation(api: ApiConversation): Conversation {
     // The list endpoint carries the real message count; the bodies are
     // fetched lazily when a conversation is opened (useConversations.loadMessages).
     messageCount: api.message_count ?? 0,
+    topic: api.topic ?? null,
     messages: [],
   };
 }
@@ -98,9 +99,12 @@ export const chatApi = {
     subject_id?: string;
     limit?: number;
     offset?: number;
+    /** Only conversations whose title contains this. */
+    q?: string;
   }): Promise<{ total: number; conversations: Conversation[] }> {
     const searchParams = new URLSearchParams();
     if (params?.subject_id) searchParams.set("subject_id", params.subject_id);
+    if (params?.q) searchParams.set("q", params.q);
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.offset) searchParams.set("offset", params.offset.toString());
 

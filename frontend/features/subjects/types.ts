@@ -28,6 +28,9 @@ export type Subject = {
   progress: number;        // Always 0 from the real API ("Chủ đề" removed, no mastery source left)
   lessons: number;         // Always 0 from the real API ("Chủ đề" removed, no topic count left)
   lastStudied: string;     // From stats.last_activity
+  /** When the subject was last used (quiz, chat, "Học", upload) - raw from
+   * stats.last_activity; null/undefined when never used. */
+  lastActivityAt?: string | null;
   accent: SubjectAccent;   // Derived from color
   currentTopic?: string;   // User's current topic
   documentCount?: number;  // From stats (subject list)
@@ -177,6 +180,28 @@ export function colorToAccent(color: string): SubjectAccent {
 
   // Default fallback
   return "emerald";
+}
+
+/** Milliseconds of a backend timestamp; Postgres sends UTC without a "Z". */
+function timeOf(value: string | null | undefined): number {
+  if (!value) return 0;
+  const time = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
+  return Number.isNaN(time) ? 0 : time;
+}
+
+/**
+ * Subjects in the order Hôm nay and Môn học show them: the one used most
+ * recently first. Creating a subject counts as using it, so a new subject
+ * comes first and subjects never used follow their creation date.
+ */
+export function byRecentUse(subjects: Subject[]): Subject[] {
+  const key = (subject: Subject) => Math.max(timeOf(subject.lastActivityAt), timeOf(subject.created_at));
+  return [...subjects].sort((a, b) => key(b) - key(a));
+}
+
+/** Lowercase without Vietnamese accents, for searching by name. */
+export function searchKey(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim();
 }
 
 /**

@@ -47,6 +47,8 @@ export type Conversation = {
   // Trusted total from the server when the local view hasn't loaded the
   // messages yet (list conversations), so the sidebar shows the real count.
   messageCount?: number;
+  /** Set for the Q&A of one Lộ trình topic (the "Học" screen). */
+  topic?: string | null;
 };
 
 export type TutorRequest = {
@@ -69,6 +71,7 @@ export interface ApiConversation {
   updated_at: string;
   last_message?: string;
   message_count?: number;
+  topic?: string | null;
 }
 
 export interface ConversationListResponse {

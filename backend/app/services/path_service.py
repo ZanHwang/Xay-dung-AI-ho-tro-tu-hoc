@@ -18,6 +18,8 @@ cleanup).
 """
 import asyncio
 import json
+import time
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -26,13 +28,54 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from fastapi import HTTPException
 
-from app.models import Subject, Quiz, QuizQuestion, QuizResult, Document, DocumentStatus, TopicLesson, Conversation, Message
+from app.models import Subject, Quiz, QuizQuestion, QuizResult, Document, DocumentStatus, DocumentStudy, TopicLesson, Conversation, Message
 from app.ai.llm import llm_manager
 from app.ai.rag import RAGPipeline
 from app.services.quiz_service import QuizService, backfill_document_topics_in_background
 
 # A topic is "done" once the best score on a quiz scoped to it reaches this.
 COMPLETION_THRESHOLD = 0.70
+
+# continue_topic: document id -> when its background topic detection was last
+# started (time.monotonic), so reloading Hôm nay doesn't start it again and again.
+BACKFILL_RETRY_SECONDS = 600
+_backfill_started: dict = {}
+
+
+def _topic_states(topics: List[str], attempts) -> List[dict]:
+    """done/current/locked for one document's ordered topics, given that
+    document's full quiz attempts (rows of PathService._full_attempts)."""
+    best: dict = {}
+    latest: dict = {}  # topic -> (created_at, pct)
+    for row in attempts:
+        if not row.total_questions:
+            continue
+        pct = row.correct_count / row.total_questions
+        if row.topic not in best or pct > best[row.topic]:
+            best[row.topic] = pct
+        if row.topic not in latest or (row.created_at and row.created_at > latest[row.topic][0]):
+            latest[row.topic] = (row.created_at, pct)
+
+    out = []
+    marked_current = False
+    for t in topics:
+        pct = best.get(t)
+        recent_pct = latest[t][1] if t in latest else None
+        done = pct is not None and pct >= COMPLETION_THRESHOLD
+        if done:
+            state = "done"
+        elif not marked_current:
+            state = "current"
+            marked_current = True
+        else:
+            state = "locked"
+        out.append({
+            "topic": t,
+            "state": state,
+            "best_percent": round(pct * 100) if pct is not None else None,
+            "recent_percent": round(recent_pct * 100) if recent_pct is not None else None,
+        })
+    return out
 
 
 class PathService:
@@ -91,58 +134,126 @@ class PathService:
             if not topics:
                 continue
 
-            # Full attempts only: a due-review / retry-wrong session submits
-            # just a few of the quiz's questions (see QuizSubmit.question_ids),
-            # and e.g. 1/1 right must not count as "100%, topic done".
-            question_counts = (
-                self.db.query(QuizQuestion.quiz_id, func.count(QuizQuestion.id).label("n"))
-                .group_by(QuizQuestion.quiz_id)
-                .subquery()
-            )
-            rows = (
-                self.db.query(Quiz.topic, QuizResult.correct_count, QuizResult.total_questions, QuizResult.created_at)
-                .join(QuizResult, QuizResult.quiz_id == Quiz.id)
-                .join(question_counts, question_counts.c.quiz_id == Quiz.id)
-                .filter(
-                    Quiz.document_id == doc.id,
-                    QuizResult.user_id == user_id,
-                    Quiz.topic.isnot(None),
-                    QuizResult.total_questions >= question_counts.c.n,
-                )
-                .all()
-            )
-            best: dict = {}
-            latest: dict = {}  # topic -> (created_at, pct)
-            for topic, correct, total, created_at in rows:
-                if not total:
-                    continue
-                pct = correct / total
-                if topic not in best or pct > best[topic]:
-                    best[topic] = pct
-                if topic not in latest or (created_at and created_at > latest[topic][0]):
-                    latest[topic] = (created_at, pct)
-
-            out = []
-            marked_current = False
-            for t in topics:
-                pct = best.get(t)
-                recent_pct = latest[t][1] if t in latest else None
-                done = pct is not None and pct >= COMPLETION_THRESHOLD
-                if done:
-                    state = "done"
-                elif not marked_current:
-                    state = "current"
-                    marked_current = True
-                else:
-                    state = "locked"
-                out.append({
-                    "topic": t,
-                    "state": state,
-                    "best_percent": round(pct * 100) if pct is not None else None,
-                    "recent_percent": round(recent_pct * 100) if recent_pct is not None else None,
-                })
-            groups.append({"document_id": doc.id, "document_name": doc.filename, "topics": out})
+            states = _topic_states(topics, self._full_attempts(user_id, [doc.id]))
+            groups.append({"document_id": doc.id, "document_name": doc.filename, "topics": states})
         return groups
+
+    def _full_attempts(self, user_id: UUID, document_ids: List[UUID]) -> list:
+        """Every FULL quiz attempt of the user on these documents. A due-review
+        / retry-wrong session submits just a few of the quiz's questions (see
+        QuizSubmit.question_ids), and e.g. 1/1 right must not count as "100%,
+        topic done"."""
+        question_counts = (
+            self.db.query(QuizQuestion.quiz_id, func.count(QuizQuestion.id).label("n"))
+            .group_by(QuizQuestion.quiz_id)
+            .subquery()
+        )
+        return (
+            self.db.query(
+                Quiz.document_id, Quiz.topic,
+                QuizResult.correct_count, QuizResult.total_questions, QuizResult.created_at,
+            )
+            .join(QuizResult, QuizResult.quiz_id == Quiz.id)
+            .join(question_counts, question_counts.c.quiz_id == Quiz.id)
+            .filter(
+                Quiz.document_id.in_(document_ids),
+                QuizResult.user_id == user_id,
+                QuizResult.total_questions >= question_counts.c.n,
+            )
+            .all()
+        )
+
+    def continue_topic(self, user_id: UUID, others: int = 3) -> dict:
+        """What "Học tiếp" continues, across ALL of the user's subjects:
+        `next` is the most recently studied document that still has a
+        "current" topic, `others` up to `others` more such documents in the
+        same order. "Studied" = a "Học" lesson opened (DocumentStudy) or a
+        full quiz attempt on the document; never-studied documents come last,
+        oldest upload first.
+
+        `state` says why there is nothing to continue: "no_documents",
+        "preparing" (a document is still being processed or split into
+        topics) or "finished" (every topic done). A ready document whose
+        topics were never computed gets them computed in the background, the
+        same way the Lộ trình tab does."""
+        documents = (
+            self.db.query(Document)
+            .filter(Document.user_id == user_id, Document.subject_id.isnot(None))
+            .order_by(Document.created_at.asc())
+            .all()
+        )
+        preparing = False
+        roads = []
+        for doc in documents:
+            if doc.status == DocumentStatus.FAILED:
+                continue
+            if doc.status != DocumentStatus.READY:
+                preparing = True
+            elif doc.topics_json is None:
+                preparing = True
+                # Hôm nay is opened often: start the (AI) topic detection at
+                # most once per document every few minutes.
+                now = time.monotonic()
+                if now - _backfill_started.get(doc.id, -BACKFILL_RETRY_SECONDS) >= BACKFILL_RETRY_SECONDS:
+                    _backfill_started[doc.id] = now
+                    asyncio.create_task(backfill_document_topics_in_background(doc.id, user_id))
+            elif json.loads(doc.topics_json):
+                roads.append(doc)
+
+        ids = [doc.id for doc in roads]
+        studied = dict(
+            self.db.query(DocumentStudy.document_id, DocumentStudy.last_studied_at)
+            .filter(DocumentStudy.document_id.in_(ids))
+            .all()
+        ) if ids else {}
+        attempts: dict = {}
+        for row in self._full_attempts(user_id, ids) if ids else []:
+            attempts.setdefault(row.document_id, []).append(row)
+            if row.created_at and row.created_at > studied.get(row.document_id, datetime.min):
+                studied[row.document_id] = row.created_at
+
+        # A stable sort (also when reversed): never-studied documents keep
+        # their upload order.
+        roads.sort(key=lambda doc: studied.get(doc.id, datetime.min), reverse=True)
+        found = []
+        for doc in roads:
+            states = _topic_states(json.loads(doc.topics_json), attempts.get(doc.id, []))
+            current = next((item for item in states if item["state"] == "current"), None)
+            if current:
+                found.append({
+                    "subject_id": doc.subject_id,
+                    "document_id": doc.id,
+                    "document_name": doc.filename,
+                    "topic": current["topic"],
+                    "topics": states,
+                })
+                if len(found) > others:
+                    break
+
+        if found:
+            state = "ready"
+        elif preparing:
+            state = "preparing"
+        elif roads:
+            state = "finished"
+        else:
+            state = "no_documents"
+        return {"next": found[0] if found else None, "others": found[1:], "state": state}
+
+    def mark_studied(self, subject_id: UUID, user_id: UUID, document_id: UUID) -> None:
+        """Remember that a "Học" lesson of this document was just opened."""
+        self._verify_document(subject_id, user_id, document_id)
+        for attempt in range(2):
+            try:
+                self.db.merge(DocumentStudy(document_id=document_id, last_studied_at=datetime.utcnow()))
+                self.db.commit()
+                return
+            except IntegrityError:
+                # Another request inserted the document's first row in between;
+                # the second try updates it.
+                self.db.rollback()
+                if attempt:
+                    raise
 
     async def _topic_row(self, subject_id: UUID, user_id: UUID, document_id: UUID, topic: str) -> Optional[dict]:
         for group in await self.document_topic_groups(subject_id, user_id):

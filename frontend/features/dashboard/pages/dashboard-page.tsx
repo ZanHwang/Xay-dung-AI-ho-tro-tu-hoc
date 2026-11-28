@@ -9,8 +9,10 @@ import { useDueReviews } from "@/features/reviews/hooks/use-due-reviews";
 import { CreateSubjectDialog } from "@/features/subjects/components/create-subject-dialog";
 import { SubjectCard } from "@/features/subjects/components/subject-card";
 import type { SubjectTab } from "@/features/subjects/components/subject-detail";
-import type { CreateSubjectInput, Subject } from "@/features/subjects/types";
-import { useContinueTopic, type ContinueTopic } from "@/features/path/hooks/use-continue-topic";
+import { byRecentUse, type CreateSubjectInput, type Subject } from "@/features/subjects/types";
+import { useContinueTopic, type ContinueHome, type ContinueTopic } from "@/features/path/hooks/use-continue-topic";
+import { ScoreRow, dayMonth } from "@/features/grades/components/score-row";
+import { useOpenResult } from "@/features/quiz/hooks/use-open-result";
 import { TopicLearnDialog } from "@/features/path/components/topic-learn-dialog";
 import { QuizOverlay } from "@/features/quiz/components/quiz-overlay";
 import type { NavKey } from "@/features/workspace/types";
@@ -38,8 +40,21 @@ type DashboardPageProps = {
 
 const WEEKDAYS = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
 
-function dayMonth(date: Date) {
-  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+/** How many subjects, scores and conversations Hôm nay shows; the rest are a click away. */
+const SHOWN_SUBJECTS = 4;
+const SHOWN_ROWS = 5;
+
+/** What to say when there is no topic to continue - see ContinueHome.state. */
+function noTopicNote(state: ContinueHome["state"], hasSubjects: boolean) {
+  if (state === "preparing") return { title: "Lộ trình đang được chuẩn bị", text: "Tài liệu đang được xử lý. Lộ trình sẽ hiện ở đây khi xong.", action: false };
+  if (state === "finished") return { title: "Bạn đã học hết các chủ đề", text: "Ôn các câu đến hạn, hoặc thêm tài liệu mới để học tiếp.", action: false };
+  return {
+    title: "Chưa có lộ trình",
+    text: hasSubjects
+      ? "Thêm tài liệu PDF vào một môn, app sẽ chia thành các chủ đề để học dần."
+      : "Tạo một môn rồi thêm tài liệu PDF, app sẽ chia thành các chủ đề để học dần.",
+    action: true,
+  };
 }
 
 function todayLabel(now = new Date()) {
@@ -63,9 +78,12 @@ export function DashboardPage({
   const [learning, setLearning] = useState<ContinueTopic | null>(null);
   const [practiceQuizId, setPracticeQuizId] = useState<string | null>(null);
 
-  const recentChats = [...conversations]
+  // Hỏi gần đây: the questions asked in Hỏi AI. A lesson's own Q&A ("Học")
+  // stays in that lesson.
+  const recentChats = conversations
+    .filter((chat) => !chat.topic)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 5);
+    .slice(0, SHOWN_ROWS);
 
   const totalQuizzes = dashboard?.total_quizzes ?? 0;
   const avgScore = dashboard?.avg_score ?? 0;
@@ -74,36 +92,19 @@ export function DashboardPage({
   const subjectById = (id: string | null | undefined) => subjects.find((subject) => subject.id === id);
   const subjectOfQuiz = (backendId: string) =>
     subjectById(quizzes.quizzes.find((quiz) => quiz.backendId === backendId)?.subjectId);
+  const shownSubjects = byRecentUse(subjects).slice(0, SHOWN_SUBJECTS);
 
-  // "Học tiếp": look at the subjects used most recently (last quiz, last chat),
-  // then any subject that has documents.
-  const candidates = loading
-    ? []
-    : Array.from(new Set([
-        ...recentQuizzes.map((recent) => subjectOfQuiz(recent.quiz_id)?.id),
-        ...recentChats.map((chat) => subjectById(chat.subjectId)?.id),
-        ...subjects.filter((subject) => (subject.documentCount ?? 0) > 0).map((subject) => subject.id),
-      ].filter((id): id is string => Boolean(id))));
-  const next = useContinueTopic(candidates);
-  const nextSubject = subjectById(next.topic?.subjectId);
-  const doneCount = next.topic?.topics.filter((item) => item.state === "done").length ?? 0;
+  // "Học tiếp" and the road below it follow the same server-chosen document;
+  // the road can switch to the other documents still being learned.
+  const { home, reload } = useContinueTopic();
+  const next = home?.next ?? null;
+  const nextSubject = subjectById(next?.subjectId);
+  const doneCount = next?.topics.filter((item) => item.state === "done").length ?? 0;
+  const note = home && !next && home.state !== "ready" ? noTopicNote(home.state, subjects.length > 0) : null;
 
-  // "Quiz gần đây" items only carry backend ids (quiz_id = Quiz.id, id =
-  // QuizResult.id) - resolve them to the matching LOCAL quiz/attempt (synced
-  // via quiz-store.ts::mergeFromServer) so the click opens that exact quiz
-  // and that exact past submission in the full-screen popup (same one used
-  // inside a subject's own "Quiz" tab - see use-quiz-overlay.ts).
-  function openRecentQuiz(recent: { id: string; quiz_id: string }) {
-    const localQuiz = quizzes.quizzes.find((q) => q.backendId === recent.quiz_id);
-    if (!localQuiz) return; // quiz was removed locally since the dashboard snapshot was taken
-    // Match on backendResultId, not .id - an attempt just submitted THIS
-    // session keeps its local draft UUID as .id (quiz-store.ts::submit),
-    // only backendResultId holds the real QuizResult id; an attempt synced
-    // from a past session (mergeFromServer) sets id === backendResultId ===
-    // result.id, so this one check covers both cases.
-    const localAttempt = quizzes.attempts.find((a) => a.backendResultId === recent.id);
-    onViewQuiz(localQuiz, { attemptId: localAttempt?.id });
-  }
+  // A score row opens that exact submission in the quiz popup, fetching it
+  // first when this browser doesn't hold it (see use-open-result.ts).
+  const opener = useOpenResult(quizzes, onViewQuiz);
 
   function chatSubjectLabel(chat: Conversation) {
     if (chat.classification === "uncertain") return "Chưa xác định môn";
@@ -146,19 +147,33 @@ export function DashboardPage({
           ) : null}
         </section>
 
-        {next.topic && nextSubject ? (
+        {next && nextSubject ? (
           <section className="task cover-cyan">
             <Paperclip className="clip" aria-hidden="true" />
             <div>
-              <h2>Học tiếp: {next.topic.topic}</h2>
-              <p>{nextSubject.name}, đã xong {doneCount} trên {next.topic.topics.length} chủ đề</p>
+              <h2>Học tiếp: {next.topic}</h2>
+              <p>{nextSubject.name}, đã xong {doneCount} trên {next.topics.length} chủ đề</p>
+              <p style={{ overflowWrap: "anywhere" }}>Tài liệu: {next.documentName}</p>
               <div className="meter" aria-hidden="true">
-                <span style={{ width: `${(doneCount / next.topic.topics.length) * 100}%` }} />
+                <span style={{ width: `${(doneCount / next.topics.length) * 100}%` }} />
               </div>
             </div>
-            <button type="button" className="btn btn-accent" onClick={() => setLearning(next.topic)}>
+            <button type="button" className="btn btn-accent" onClick={() => setLearning(next)}>
               Học
             </button>
+          </section>
+        ) : note ? (
+          <section className="task cover-cyan">
+            <Paperclip className="clip" aria-hidden="true" />
+            <div>
+              <h2>{note.title}</h2>
+              <p>{note.text}</p>
+            </div>
+            {note.action ? (
+              <button type="button" className="btn btn-outline" onClick={() => onNavigate("subjects")}>
+                Mở Môn học
+              </button>
+            ) : null}
           </section>
         ) : null}
       </div>
@@ -174,7 +189,7 @@ export function DashboardPage({
           ) : null}
         </div>
         <div className="subject-grid">
-          {subjects.slice(0, 4).map((subject) => (
+          {shownSubjects.map((subject) => (
             <SubjectCard key={subject.id} subject={subject} onOpen={onOpenSubject} />
           ))}
           <CreateSubjectDialog
@@ -189,8 +204,12 @@ export function DashboardPage({
         </div>
       </section>
 
-      {next.topic && nextSubject ? (
-        <LearningRoad road={next.topic} onOpenPath={() => onOpenSubject(nextSubject.id, "path")} />
+      {next && nextSubject ? (
+        <LearningRoad
+          roads={[next, ...(home?.others ?? [])]}
+          subjects={subjects}
+          onOpenPath={(subjectId) => onOpenSubject(subjectId, "path")}
+        />
       ) : null}
       </div>
 
@@ -201,7 +220,13 @@ export function DashboardPage({
             <span className="sub">
               {totalQuizzes > 0 ? `Trung bình ${Math.round(avgScore)}% qua ${totalQuizzes} bài` : ""}
             </span>
+            {recentQuizzes.length > 0 ? (
+              <button type="button" className="link-btn" onClick={() => onNavigate("grades")}>
+                Xem tất cả
+              </button>
+            ) : null}
           </div>
+          {opener.error ? <p role="alert" className="meta">{opener.error}</p> : null}
           {loading && recentQuizzes.length === 0 ? (
             <div className="space-y-2" role="status" aria-label="Đang tải điểm">
               {[0, 1, 2].map((row) => (
@@ -211,26 +236,21 @@ export function DashboardPage({
           ) : recentQuizzes.length === 0 ? (
             <p className="empty">Chưa có điểm nào. Mở một môn, tạo quiz và làm thử.</p>
           ) : (
-            recentQuizzes.slice(0, 5).map((quiz) => {
-              const subject = subjectOfQuiz(quiz.quiz_id);
-              const date = dayMonth(new Date(quiz.created_at));
-              return (
-                <button type="button" key={quiz.id} onClick={() => openRecentQuiz(quiz)} className="row-link">
-                  <span className={`spine-dot ${subject ? `cover-${subject.accent}` : ""}`} aria-hidden="true" />
-                  <span className="grow">
-                    <span className="title">{quiz.title}</span>
-                    <span className="sub2">{subject ? `${subject.name}, ngày ${date}` : `Làm ngày ${date}`}</span>
-                  </span>
-                  <span className="score-pen"><span className="sr-only">Đạt </span>{Math.round(quiz.score)}%</span>
-                </button>
-              );
-            })
+            recentQuizzes.slice(0, SHOWN_ROWS).map((quiz) => (
+              <ScoreRow
+                key={quiz.id}
+                row={quiz}
+                subject={subjectById(quiz.subject_id) ?? subjectOfQuiz(quiz.quiz_id)}
+                busy={opener.opening === quiz.id}
+                onOpen={(row) => void opener.open(row.quiz_id, row.id)}
+              />
+            ))
           )}
         </section>
 
         <section className="dash-block" aria-labelledby="dash-chats">
           <div className="block-head">
-            <h2 id="dash-chats" className="block-title">Đang hỏi dở</h2>
+            <h2 id="dash-chats" className="block-title">Hỏi gần đây</h2>
             <button type="button" className="link-btn" onClick={() => onNavigate("tutor")}>
               Mở Hỏi AI
             </button>
@@ -271,7 +291,7 @@ export function DashboardPage({
         quiz={quizzes.quizzes.find((item) => item.id === practiceQuizId) ?? null}
         quizzes={quizzes}
         autoStart
-        onClose={() => { setPracticeQuizId(null); next.reload(); void refresh(); }}
+        onClose={() => { setPracticeQuizId(null); reload(); void refresh(); }}
         onSwitchQuiz={() => {}}
       />
     </div>

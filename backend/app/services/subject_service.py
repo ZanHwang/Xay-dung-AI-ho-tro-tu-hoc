@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.models import Subject, Document, Quiz
+from app.models import Subject, Document, DocumentStudy, Quiz, QuizResult, Conversation, Message
 from app.schemas.subject import SubjectCreate, SubjectUpdate
 from fastapi import HTTPException, status
 
@@ -167,8 +167,39 @@ class SubjectService:
         return {
             "total_documents": total_documents,
             "total_quizzes": total_quizzes,
-            "last_activity": None
+            "last_activity": self.last_activity([subject_id]).get(subject_id),
         }
+
+    def last_activity(self, subject_ids: List[UUID]) -> dict:
+        """{subject_id: when the subject was last used}: the latest quiz
+        submission, chat message, opened "Học" lesson or document upload in
+        it. A subject never used is missing from the result. One grouped
+        query per kind of activity, whatever the number of subjects."""
+        if not subject_ids:
+            return {}
+        queries = [
+            self.db.query(Quiz.subject_id, func.max(QuizResult.created_at))
+            .join(QuizResult, QuizResult.quiz_id == Quiz.id)
+            .filter(Quiz.subject_id.in_(subject_ids))
+            .group_by(Quiz.subject_id),
+            self.db.query(Conversation.subject_id, func.max(Message.created_at))
+            .join(Message, Message.conversation_id == Conversation.id)
+            .filter(Conversation.subject_id.in_(subject_ids))
+            .group_by(Conversation.subject_id),
+            self.db.query(Document.subject_id, func.max(DocumentStudy.last_studied_at))
+            .join(DocumentStudy, DocumentStudy.document_id == Document.id)
+            .filter(Document.subject_id.in_(subject_ids))
+            .group_by(Document.subject_id),
+            self.db.query(Document.subject_id, func.max(Document.created_at))
+            .filter(Document.subject_id.in_(subject_ids))
+            .group_by(Document.subject_id),
+        ]
+        latest: dict = {}
+        for query in queries:
+            for subject_id, when in query.all():
+                if when and (subject_id not in latest or when > latest[subject_id]):
+                    latest[subject_id] = when
+        return latest
 
     def get_stats_for_subjects(self, subject_ids: List[UUID]) -> dict:
         """Document/quiz counts for MANY subjects at once - exactly 2 GROUP BY
@@ -191,11 +222,12 @@ class SubjectService:
             .group_by(Quiz.subject_id)
             .all()
         )
+        last_used = self.last_activity(subject_ids)
         return {
             sid: {
                 "total_documents": doc_counts.get(sid, 0),
                 "total_quizzes": quiz_counts.get(sid, 0),
-                "last_activity": None,
+                "last_activity": last_used.get(sid),
             }
             for sid in subject_ids
         }
