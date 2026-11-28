@@ -55,6 +55,24 @@ export default defineConfig(async () => {
       ...(managedLinux ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] } : {}),
       ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
     },
+    environments: {
+      client: {
+        // Windows-only bug in vinext 1.0.0-beta.5: it matches its shim files
+        // against a backslash path, so its own "vinext" chunk is never made,
+        // the navigation module gets merged into the entry chunk, and every
+        // <Link> click throws in the production build. Declare that chunk here
+        // with a separator-independent pattern.
+        build: {
+          rolldownOptions: {
+            output: {
+              codeSplitting: {
+                groups: [{ name: "vinext", test: /[\\/]vinext[\\/]dist[\\/]shims[\\/]/ }],
+              },
+            },
+          },
+        },
+      },
+    },
     plugins: [
       vinext(),
       sites({ mockAuth: !managedLinux }),
