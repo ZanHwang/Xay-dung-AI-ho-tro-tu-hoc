@@ -1,19 +1,19 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, status, Query, UploadFile, File
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
+from urllib.parse import quote
 from uuid import UUID
 import asyncio
-import os
 from app.database import get_db
 from app.schemas.document import (
     DocumentResponse, DocumentListResponse, DocumentStatusResponse, DocumentProcessRequest
 )
-from app.services.document_service import DocumentService, resolve_document_path
+from app.services.document_service import DocumentService
+from app.services.storage import storage, figure_key
 from app.ai.document_processor import render_page_png
 from app.services.quiz_service import backfill_document_topics_in_background
 from app.models.document import DocumentStatus
-from app.config import settings
 from app.utils.security import get_current_user
 from app.models import User
 
@@ -65,7 +65,7 @@ async def get_documents(
 
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
-    file: UploadFile = File(..., description="File to upload (PDF, DOCX, PPTX)"),
+    file: UploadFile = File(..., description="PDF file to upload"),
     # Accept subject_id as a multipart form field. The previous signature used
     # `Query(...)` which silently dropped the value when the client sent it as
     # a form field, leaving the document unattached to any subject.
@@ -75,7 +75,7 @@ async def upload_document(
 ):
     """
     Upload a new document.
-    Supported formats: PDF, DOCX, PPTX
+    Supported format: PDF
     Maximum size: 50MB
     """
     if not file.filename:
@@ -128,16 +128,16 @@ async def download_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    file_path = resolve_document_path(document)
-    if not os.path.exists(file_path):
+    data = await storage.try_get(document.file_path)
+    if data is None:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="File is no longer available on the server."
         )
-    return FileResponse(
-        path=file_path,
-        media_type=document.file_type or "application/octet-stream",
-        filename=document.filename,
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(document.filename, safe='')}"},
     )
 
 
@@ -150,29 +150,19 @@ async def get_document_figure(
 ):
     """Serve an extracted figure image for a document.
 
-    Figure files are stored under
-    `<bucket>/<user_id>/figures/<document_id>/<n>.{png,jpg}` by the index
-    pipeline. Only the bare filename is accepted and it is resolved inside
-    that fixed directory, so path traversal is not possible.
+    Only the bare filename is used (figure_key takes its basename), resolved
+    under the document's own figure key prefix - no path traversal.
     """
     document = service.get_document_by_id(document_id, current_user.id)
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
-    base_dir = os.path.join(
-        os.getcwd(),
-        settings.object_storage_bucket,
-        str(current_user.id),
-        "figures",
-        str(document_id),
-    )
-    file_path = os.path.join(base_dir, os.path.basename(filename))
-    # Guard against anything that escapes the figures directory.
-    if os.path.abspath(file_path).startswith(os.path.abspath(base_dir)) and os.path.isfile(file_path):
-        media_type = "image/jpeg" if file_path.lower().endswith((".jpg", ".jpeg")) else "image/png"
-        return FileResponse(path=file_path, media_type=media_type, filename=filename)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+    data = await storage.try_get(figure_key(current_user.id, document_id, filename))
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+    media_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
+    return Response(content=data, media_type=media_type)
 
 
 @router.get("/{document_id}/pages/{page_no}/image")
@@ -184,15 +174,16 @@ async def get_document_page_image(
 ):
     """Rasterize one page of the document's original PDF as a PNG - lets the
     frontend show the actual slide/page alongside a RAG excerpt's text (see
-    Lộ trình "Học" screen), not just the extracted text. Rendered on demand,
-    no cache - this isn't a hot path (only "Học" calls it) and PyMuPDF
-    rendering one page is fast enough.
+    Lộ trình "Học" screen), not just the extracted text. Rendered on demand;
+    storage keeps the PDF bytes cached in memory, so N pages of one document
+    fetch it from R2 once.
     """
     document = service.get_document_by_id(document_id, current_user.id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    data = await storage.try_get(document.file_path) if page_no >= 1 else None
     # page_no is 1-based; 0/negative would index from the end (doc[-1]).
-    png = render_page_png(resolve_document_path(document), page_no) if page_no >= 1 else None
+    png = render_page_png(data, page_no) if data else None
     if not png:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
     return Response(content=png, media_type="image/png")

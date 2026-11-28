@@ -43,12 +43,21 @@ class ChatService:
             )
             new_conversation = True
 
-        # Save user message
+        # Save user message (with its attachments, so they show on every device)
+        user_meta = None
+        if request.attachment_ids:
+            from app.services.chat_attachment_service import ChatAttachmentService
+            attached = ChatAttachmentService(self.db).attach_to_conversation(
+                request.attachment_ids, user_id, conversation.id
+            )
+            if attached:
+                user_meta = json.dumps({"attachments": attached})
         user_message = self.conversation_service.create_message(
             conversation.id,
             user_id,
             MessageRole.USER,
-            request.content
+            request.content,
+            metadata=user_meta,
         )
 
         # Get conversation history for context (the last N messages BEFORE this

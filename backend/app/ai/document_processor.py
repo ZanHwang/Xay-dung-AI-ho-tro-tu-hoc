@@ -1,4 +1,5 @@
-"""Extract plain text from stored documents and split it into chunks.
+"""Extract plain text from stored PDFs (given as bytes - files live in shared
+storage, see app/services/storage.py) and split it into chunks.
 
 PDFs are read with PyMuPDF (keeps page structure better than pypdf for
 formulas); each page's text is tagged `[Trang N]` so answers can cite which
@@ -6,6 +7,7 @@ page they came from. Scan-only pages (no text layer) are flagged for OCR in
 the service layer. Embedded images large enough to be figures are detected
 here too - the service captions them with the vision model.
 """
+import io
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -37,17 +39,21 @@ MIN_FIGURE_AREA = 150 * 150
 OCR_DPI = 150
 
 
-def extract_text(file_path: str) -> str:
+def _open(data: bytes):
+    return fitz.open(stream=data, filetype="pdf")
+
+
+def extract_text(data: bytes) -> str:
     """Extract readable text from a stored PDF (text layers only - uploads are
     PDF-only, see document_service.ALLOWED_EXTENSIONS).
 
     Returns an empty string when there is no reliable text layer (scanned
     PDFs) - the service layer detects those pages and runs OCR.
     """
-    return _extract_pdf(file_path)
+    return _extract_pdf(data)
 
 
-def page_texts(file_path: str) -> List[Tuple[int, str, bool]]:
+def page_texts(data: bytes) -> List[Tuple[int, str, bool]]:
     """Per-page text for a PDF: (page_no, text, needs_ocr).
 
     needs_ocr is True when the text layer is empty/too thin - the service
@@ -57,7 +63,7 @@ def page_texts(file_path: str) -> List[Tuple[int, str, bool]]:
     pages: List[Tuple[int, str, bool]] = []
     if _HAS_PYMUPDF:
         try:
-            doc = fitz.open(file_path)
+            doc = _open(data)
         except Exception:
             return pages
         try:
@@ -69,7 +75,7 @@ def page_texts(file_path: str) -> List[Tuple[int, str, bool]]:
         return pages
     # pypdf fallback: OCR flags only when a page has no text at all.
     try:
-        reader = PdfReader(file_path)
+        reader = PdfReader(io.BytesIO(data))
     except Exception:
         return pages
     for i, page in enumerate(reader.pages, 1):
@@ -78,7 +84,7 @@ def page_texts(file_path: str) -> List[Tuple[int, str, bool]]:
     return pages
 
 
-def pdf_page_count(file_path: str) -> Optional[int]:
+def pdf_page_count(data: bytes) -> Optional[int]:
     """Number of pages in a PDF (PyMuPDF preferred, pypdf fallback).
 
     Used to backfill documents.total_pages on demand - the import pipeline
@@ -86,7 +92,7 @@ def pdf_page_count(file_path: str) -> Optional[int]:
     """
     if _HAS_PYMUPDF:
         try:
-            doc = fitz.open(file_path)
+            doc = _open(data)
             try:
                 return doc.page_count
             finally:
@@ -94,17 +100,17 @@ def pdf_page_count(file_path: str) -> Optional[int]:
         except Exception:
             pass
     try:
-        return len(PdfReader(file_path).pages)
+        return len(PdfReader(io.BytesIO(data)).pages)
     except Exception:
         return None
 
 
-def render_page_png(file_path: str, page_no: int, dpi: int = OCR_DPI) -> Optional[bytes]:
+def render_page_png(data: bytes, page_no: int, dpi: int = OCR_DPI) -> Optional[bytes]:
     """Render one PDF page to a PNG (for OCR and for the model to see it)."""
     if not _HAS_PYMUPDF:
         return None
     try:
-        doc = fitz.open(file_path)
+        doc = _open(data)
         try:
             pix = doc[page_no - 1].get_pixmap(dpi=dpi)
             return pix.tobytes("png")
@@ -114,7 +120,7 @@ def render_page_png(file_path: str, page_no: int, dpi: int = OCR_DPI) -> Optiona
         return None
 
 
-def figure_info(file_path: str) -> List[Dict[str, Any]]:
+def figure_info(data: bytes) -> List[Dict[str, Any]]:
     """Find embedded images large enough to be figures or charts in a PDF.
 
     Returns [{"page": n, "xref": int, "bbox": [x0,y0,x1,y1]}] - one entry per
@@ -124,7 +130,7 @@ def figure_info(file_path: str) -> List[Dict[str, Any]]:
         return []
     out: List[Dict[str, Any]] = []
     try:
-        doc = fitz.open(file_path)
+        doc = _open(data)
     except Exception:
         return out
     try:
@@ -144,7 +150,7 @@ def figure_info(file_path: str) -> List[Dict[str, Any]]:
     return out
 
 
-def figure_bytes(file_path: str, info: Dict[str, Any]) -> Tuple[Optional[bytes], str]:
+def figure_bytes(data: bytes, info: Dict[str, Any]) -> Tuple[Optional[bytes], str]:
     """Return (image_bytes, mime_type) for a detected figure.
 
     Prefers the embedded image data; falls back to rendering its page
@@ -154,7 +160,7 @@ def figure_bytes(file_path: str, info: Dict[str, Any]) -> Tuple[Optional[bytes],
     if not _HAS_PYMUPDF:
         return None, "image/png"
     try:
-        doc = fitz.open(file_path)
+        doc = _open(data)
     except Exception:
         return None, "image/png"
     try:
@@ -175,11 +181,11 @@ def figure_bytes(file_path: str, info: Dict[str, Any]) -> Tuple[Optional[bytes],
         doc.close()
 
 
-def _extract_pdf(file_path: str) -> str:
+def _extract_pdf(data: bytes) -> str:
     parts: List[str] = []
     if _HAS_PYMUPDF:
         try:
-            doc = fitz.open(file_path)
+            doc = _open(data)
         except Exception:
             doc = None
         if doc is not None:
@@ -192,7 +198,7 @@ def _extract_pdf(file_path: str) -> str:
                 doc.close()
             return "\n\n".join(parts)
     try:
-        reader = PdfReader(file_path)
+        reader = PdfReader(io.BytesIO(data))
     except Exception:
         return ""
     for i, page in enumerate(reader.pages, 1):

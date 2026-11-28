@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models import Document, Subject, DocumentStatus
 from app.schemas.document import DocumentUpload, DocumentUpdate
-from app.config import settings
 from fastapi import HTTPException, status, UploadFile
-import shutil
+from app.services.storage import storage, document_key, document_prefix, figure_key
 from app.ai.document_processor import (
     extract_text,
     chunk_text,
@@ -43,38 +42,14 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 _processing_document_ids: set[UUID] = set()
 
 
-def resolve_document_path(document: Document) -> str:
-    """Absolute path of the stored file for a document.
-
-    `document.file_path` is stored relative to the storage bucket (e.g.
-    `documents/<user_id>/<uuid>_<filename>.pdf`). The bucket itself can be a
-    relative path (default "documents"), and file_path may already start with
-    that prefix - in that case we must NOT prepend it again.
-    """
-    raw_path = document.file_path
-    bucket = settings.object_storage_bucket
-    if os.path.isabs(raw_path):
-        return raw_path
-    if bucket and (
-        raw_path == bucket
-        or raw_path.startswith(bucket + os.sep)
-        or raw_path.startswith(bucket + "/")
-    ):
-        return raw_path
-    if os.path.isabs(bucket):
-        return os.path.join(bucket, raw_path)
-    return os.path.join(os.getcwd(), bucket, raw_path) if bucket else os.path.join(os.getcwd(), raw_path)
+async def read_document_bytes(document: Document) -> bytes:
+    """The document's original PDF from shared storage (StorageError if missing)."""
+    return await storage.get(document.file_path)
 
 
 class DocumentService:
     def __init__(self, db: Session):
         self.db = db
-
-    def _get_storage_path(self, user_id: UUID, filename: str) -> str:
-        """Generate storage path for a file."""
-        user_dir = os.path.join(settings.object_storage_bucket, str(user_id))
-        os.makedirs(user_dir, exist_ok=True)
-        return os.path.join(user_dir, f"{uuid.uuid4()}_{filename}")
 
     def _validate_file(self, file: UploadFile) -> str:
         """Validate uploaded file."""
@@ -157,21 +132,19 @@ class DocumentService:
                     detail="Subject not found"
                 )
 
-        # Generate storage path
-        storage_path = self._get_storage_path(user_id, file.filename)
-
-        # Save file (in production, save to object storage)
-        # For now, save to local storage
-        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
-        with open(storage_path, "wb") as f:
-            f.write(content)
+        # Shared storage (R2, or the local folder before R2 is configured);
+        # file_path holds the storage key, not a path on this machine.
+        document_id = uuid.uuid4()
+        key = document_key(user_id, document_id)
+        await storage.put(key, content, "application/pdf")
 
         # Create document record
         document = Document(
+            id=document_id,
             user_id=user_id,
             subject_id=subject_id,
             filename=file.filename,
-            file_path=storage_path,
+            file_path=key,
             file_type=ext[1:],  # Remove dot
             file_size=file_size,
             status=DocumentStatus.UPLOADED
@@ -227,10 +200,11 @@ class DocumentService:
             chunks: List[str] = []
             figures: List[Optional[str]] = []  # parallel to chunks
 
-            chunks, figures = await self._process_pdf(document_id, user_id, info["file_path"])
+            data = await storage.get(info["file_path"])
+            chunks, figures = await self._process_pdf(document_id, user_id, data)
 
             if not chunks:
-                text = extract_text(info["file_path"])
+                text = extract_text(data)
                 chunks = chunk_text(text)
                 figures = [None] * len(chunks)
 
@@ -325,15 +299,16 @@ class DocumentService:
     # PDF pipeline: OCR of scan-only pages + caption of embedded figures
     # ------------------------------------------------------------------
 
-    async def _process_pdf(self, document_id: UUID, user_id: UUID, file_path: str) -> tuple[List[str], List[Optional[str]]]:
-        """Return (chunks, figure_paths) for one PDF.
+    async def _process_pdf(self, document_id: UUID, user_id: UUID, data: bytes) -> tuple[List[str], List[Optional[str]]]:
+        """Return (chunks, figure_filenames) for one PDF.
 
         Text pages become ordinary chunks; OCR'd pages become chunks marked
         with their page; each embedded figure becomes a "Mô tả hình" chunk
-        that carries the path of the stored image so the UI can display it
-        and the vision model can inspect it at query time.
+        that carries the filename of the stored image (see storage.figure_key)
+        so the UI can display it and the vision model can inspect it at query
+        time.
         """
-        pages = page_texts(file_path)
+        pages = page_texts(data)
 
         text_parts: List[str] = []
         in_ocr = False
@@ -341,7 +316,7 @@ class DocumentService:
             if text:
                 text_parts.append(f"[Trang {page_no}]\n{text}")
             elif needs_ocr:
-                png = render_page_png(file_path, page_no)
+                png = render_page_png(data, page_no)
                 if png:
                     if not in_ocr:
                         self._set_status(document_id, user_id, DocumentStatus.OCR_PROCESSING)
@@ -355,16 +330,13 @@ class DocumentService:
 
         # Figures: caption at index time, keep the image for query-time
         # inspection. The caption chunk is what makes a figure findable.
-        figures_dir = self._figures_dir(user_id, document_id)
-        for index, info in enumerate(figure_info(file_path)):
-            image, mime = figure_bytes(file_path, info)
+        for index, info in enumerate(figure_info(data)):
+            image, mime = figure_bytes(data, info)
             if not image:
                 continue
             ext = "jpg" if mime == "image/jpeg" else "png"
-            relative_path = os.path.join(figures_dir, f"{index:03d}.{ext}")
-            os.makedirs(figures_dir, exist_ok=True)
-            with open(os.path.join(os.getcwd(), relative_path), "wb") as f:
-                f.write(image)
+            filename = f"{index:03d}.{ext}"
+            await storage.put(figure_key(user_id, document_id, filename), image, mime)
 
             caption = await caption_figure(image, mime)
             if not caption:
@@ -372,18 +344,12 @@ class DocumentService:
             chunks.append(
                 f"[Trang {info['page']}]\n[Mô tả hình {index + 1}]\n{caption}"
             )
-            # Store only the filename: the figures endpoint resolves it inside
-            # the document's fixed figure directory, and the UI builds the
+            # Store only the filename: the figures endpoint resolves it under
+            # the document's own figure key prefix, and the UI builds the
             # citation URL from document_id + this name.
-            figures.append(os.path.basename(relative_path))
+            figures.append(filename)
 
         return chunks, figures
-
-    def _figures_dir(self, user_id: UUID, document_id: UUID) -> str:
-        """Storage dir for a document's extracted figures (relative to CWD)."""
-        return os.path.join(
-            settings.object_storage_bucket, str(user_id), "figures", str(document_id)
-        )
 
     def update_document(
         self, document_id: UUID, user_id: UUID, data: DocumentUpdate
@@ -430,7 +396,8 @@ class DocumentService:
 
     async def purge_storage(self, document: Document) -> None:
         """Remove everything a document owns outside the DB row: its Qdrant
-        vectors, the uploaded file and its extracted figures directory."""
+        vectors, and its original PDF + extracted figures in storage (all
+        under one key prefix)."""
         # Vectors first so the chat can never cite a deleted document.
         try:
             await qdrant_store.delete_document(document.id, document.user_id)
@@ -438,10 +405,7 @@ class DocumentService:
             # Qdrant is unavailable: still remove the file/figures, leaving the
             # orphaned vectors (they are owned per user and harmless).
             pass
-        path = resolve_document_path(document)
-        if os.path.exists(path):
-            os.remove(path)
-        shutil.rmtree(self._figures_dir(document.user_id, document.id), ignore_errors=True)
+        await storage.delete_prefix(document_prefix(document.user_id, document.id))
 
     def get_document_status(self, document_id: UUID, user_id: UUID) -> dict:
         """Get processing status of a document."""

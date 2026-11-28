@@ -1,7 +1,6 @@
-import { addSubjectDocuments, deleteSubjectDocument, readSubjectDocument } from "@/features/subjects/services/document.service";
+import { httpClient } from "@/services/http-client";
 import type { ChatImage } from "../types";
 
-export const CHAT_IMAGES_GROUP = "jarvis-tutor-images";
 export const MAX_CHAT_IMAGES = 4;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -14,22 +13,27 @@ export function validateChatImages(files: File[]) {
   }
 }
 
-export async function saveChatImages(files: File[]): Promise<ChatImage[]> {
-  validateChatImages(files);
-  if (!files.length) return [];
-  // Decode before persisting so invalid or disguised files cannot break the viewer.
-  for (const file of files) {
-    try {
-      const bitmap = await createImageBitmap(file);
-      bitmap.close();
-    } catch { throw new Error(`Không đọc được ảnh “${file.name}”. Hãy chọn ảnh JPG, PNG hoặc WebP hợp lệ.`); }
+// Attachments live on the server (shared storage), so a conversation shows
+// them on every device. Cached per page load: re-renders don't refetch.
+const blobs = new Map<string, Promise<Blob | null>>();
+
+export function loadChatImage(id: string): Promise<Blob | null> {
+  let pending = blobs.get(id);
+  if (!pending) {
+    pending = httpClient.getBlob(`/conversations/attachments/${encodeURIComponent(id)}`).catch(() => {
+      blobs.delete(id);
+      return null;
+    });
+    blobs.set(id, pending);
   }
-  const stored = await addSubjectDocuments(CHAT_IMAGES_GROUP, files);
-  return stored.map(({ id, name, type, size }) => ({ id, name, type, size }));
+  return pending;
 }
-export async function loadChatImage(id: string) {
-  return (await readSubjectDocument(CHAT_IMAGES_GROUP, id))?.blob ?? null;
-}
+
+/** Delete attachments uploaded for a message that was never sent. (Deleting
+ * a conversation removes its attachments server-side by itself.) */
 export async function removeChatImages(images: ChatImage[]) {
-  await Promise.all(images.map((image) => deleteSubjectDocument(CHAT_IMAGES_GROUP, image.id)));
+  await Promise.all(images.map(async (image) => {
+    blobs.delete(image.id);
+    await httpClient.delete(`/conversations/attachments/${encodeURIComponent(image.id)}`);
+  }));
 }

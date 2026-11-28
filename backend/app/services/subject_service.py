@@ -124,7 +124,8 @@ class SubjectService:
     async def delete_subject(self, subject_id: UUID, user_id: UUID) -> bool:
         """Delete a subject and everything in it. The ORM cascade on Subject
         deletes its documents, conversations and quizzes rows; each document's
-        vectors, file and figures live outside the DB, so purge them first."""
+        vectors/file/figures and each conversation's attachment files live
+        outside the DB, so purge them first."""
         from app.services.document_service import DocumentService
 
         subject = self.get_subject_by_id(subject_id, user_id)
@@ -134,9 +135,14 @@ class SubjectService:
                 detail="Subject not found"
             )
 
+        from app.services.chat_attachment_service import ChatAttachmentService
+
         documents = DocumentService(self.db)
         for document in subject.documents:
             await documents.purge_storage(document)
+        attachments = ChatAttachmentService(self.db)
+        for conversation in subject.conversations:
+            await attachments.purge_conversation(conversation.id, user_id)
         self.db.delete(subject)
         self.db.commit()
         return True

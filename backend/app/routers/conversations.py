@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, File, HTTPException, status, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
@@ -6,10 +6,11 @@ from app.database import get_db
 from app.schemas.conversation import (
     ConversationCreate, ConversationUpdate, ConversationResponse,
     ConversationListResponse, MessageResponse, MessageListResponse,
-    ChatRequest, ChatResponse
+    ChatRequest, ChatResponse, ChatAttachmentResponse
 )
 from app.services.conversation_service import ConversationService
 from app.services.chat_service import ChatService
+from app.services.chat_attachment_service import ChatAttachmentService
 from app.utils.security import get_current_user
 from app.models import User
 
@@ -22,6 +23,10 @@ def get_conversation_service(db: Session = Depends(get_db)) -> ConversationServi
 
 def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
     return ChatService(db)
+
+
+def get_attachment_service(db: Session = Depends(get_db)) -> ChatAttachmentService:
+    return ChatAttachmentService(db)
 
 
 @router.get("/", response_model=ConversationListResponse)
@@ -90,15 +95,53 @@ def update_conversation(
 
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_conversation(
+async def delete_conversation(
     conversation_id: UUID,
     current_user: User = Depends(get_current_user),
-    service: ConversationService = Depends(get_conversation_service)
+    service: ConversationService = Depends(get_conversation_service),
+    attachments: ChatAttachmentService = Depends(get_attachment_service),
 ):
     """
-    Delete a conversation and all its messages.
+    Delete a conversation, all its messages and its attachment files.
     """
+    if service.get_conversation_by_id(conversation_id, current_user.id):
+        await attachments.purge_conversation(conversation_id, current_user.id)
     service.delete_conversation(conversation_id, current_user.id)
+    return None
+
+
+@router.post("/attachments", response_model=ChatAttachmentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_attachment(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    attachments: ChatAttachmentService = Depends(get_attachment_service),
+):
+    """Store an image/PDF for an upcoming chat message (shared storage, so the
+    conversation shows it on every device). Send its id in ChatRequest.attachment_ids."""
+    attachment = await attachments.upload(current_user.id, file)
+    return ChatAttachmentResponse(id=attachment.id, name=attachment.name, type=attachment.media_type, size=attachment.size)
+
+
+@router.get("/attachments/{attachment_id}")
+async def download_attachment(
+    attachment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    attachments: ChatAttachmentService = Depends(get_attachment_service),
+):
+    attachment, data = await attachments.content(attachment_id, current_user.id)
+    return Response(content=data, media_type=attachment.media_type, headers={
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
+@router.delete("/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_attachment(
+    attachment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    attachments: ChatAttachmentService = Depends(get_attachment_service),
+):
+    await attachments.delete(attachment_id, current_user.id)
     return None
 
 

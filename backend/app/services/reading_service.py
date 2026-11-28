@@ -25,7 +25,7 @@ from app.ai.llm import llm_manager
 from app.ai.figures import inspect_top_figure
 from app.ai.document_processor import page_texts, render_page_png, pdf_page_count
 from app.ai.vision import ocr_page
-from app.services.document_service import resolve_document_path
+from app.services.document_service import read_document_bytes
 from app.ai.llm import MATH_RULE
 
 # Max pages per summarization request and max OCR calls per request.
@@ -304,9 +304,9 @@ class ReadingService:
             part_from: int, part_to: int, ocr_budget: int = MAX_SUMMARY_OCR
         ) -> "tuple[str, bool]":
             """Read one part's pages into a combined text (bounded OCR)."""
-            file_path = resolve_document_path(document)
+            data = await read_document_bytes(document)
             pages = [
-                p for p in page_texts(file_path) if part_from <= p[0] <= part_to
+                p for p in page_texts(data) if part_from <= p[0] <= part_to
             ]
             parts: List[str] = []
             ocr_truncated = False
@@ -317,7 +317,7 @@ class ReadingService:
                 elif needs_ocr:
                     if budget > 0:
                         budget -= 1
-                        png = render_page_png(file_path, page_no)
+                        png = render_page_png(data, page_no)
                         ocr = await ocr_page(png) if png else None
                         if ocr:
                             parts.append(f"[Trang {page_no}]\n{ocr}")
@@ -394,7 +394,7 @@ class ReadingService:
     # A1: backfill total_pages; B1: one tiny LLM call judges the intent
     # ------------------------------------------------------------------
 
-    def _ensure_total_pages(self, document: Document) -> int:
+    async def _ensure_total_pages(self, document: Document) -> int:
         """Return the document's page count, backfilling `documents.total_pages`
         in place (A1). The import pipeline never wrote it, so "tóm tắt cả
         file" had no range to work on. Read the PDF once, cache in the DB.
@@ -404,7 +404,7 @@ class ReadingService:
         count = None
         if document.file_type == "pdf":
             try:
-                count = pdf_page_count(resolve_document_path(document))
+                count = pdf_page_count(await read_document_bytes(document))
             except Exception:
                 count = None
         if count:
@@ -441,7 +441,7 @@ class ReadingService:
         regex fallback keeps the old deterministic behaviour."""
         if not _summary_prefilter(question):
             return None
-        total = self._ensure_total_pages(document)
+        total = await self._ensure_total_pages(document)
 
         prompt = (
             _CLASSIFY_SYSTEM

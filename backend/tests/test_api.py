@@ -329,3 +329,120 @@ class TestHealth:
         response = client.get("/health")
         assert response.status_code == 200
         assert "status" in response.json()
+
+
+def _pdf_bytes(pages: int = 2) -> bytes:
+    import pymupdf
+    doc = pymupdf.open()
+    for n in range(1, pages + 1):
+        doc.new_page().insert_text((72, 72), f"Noi dung trang {n}")
+    return doc.tobytes()
+
+
+def _login(client, email="test@example.com"):
+    client.post("/api/auth/register", json={
+        "email": email, "password": "password123",
+        "confirm_password": "password123", "full_name": "Test User",
+    })
+    token = client.post("/api/auth/login", data={"username": email, "password": "password123"}).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _user_id(client, headers):
+    return client.get("/api/auth/me", headers=headers).json()["id"]
+
+
+class TestDocumentStorage:
+    """Documents live in shared storage (R2 in production, a temp folder here)."""
+
+    @pytest.fixture(autouse=True)
+    def no_background_processing(self, monkeypatch):
+        from app.services.document_service import DocumentService
+
+        from app.ai.qdrant_store import qdrant_store
+
+        async def skip(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(DocumentService, "process_document", skip)
+        monkeypatch.setattr(qdrant_store, "delete_document", skip)
+
+    def test_upload_download_page_image_and_delete(self, client, isolated_storage):
+        from app.services.storage import StorageError, document_key, document_prefix, figure_key
+        import asyncio
+
+        headers = _login(client)
+        pdf = _pdf_bytes()
+        uploaded = client.post(
+            "/api/documents/", headers=headers,
+            files={"file": ("bai giang.pdf", pdf, "application/pdf")},
+        )
+        assert uploaded.status_code == 201
+        doc = uploaded.json()
+        assert isolated_storage.backend.get(document_key(doc["user_id"], doc["id"])) == pdf
+
+        download = client.get(f"/api/documents/{doc['id']}/download", headers=headers)
+        assert download.status_code == 200
+        assert download.content == pdf
+        assert download.headers["content-type"] == "application/pdf"
+
+        page = client.get(f"/api/documents/{doc['id']}/pages/2/image", headers=headers)
+        assert page.status_code == 200 and page.content.startswith(b"\x89PNG")
+        assert client.get(f"/api/documents/{doc['id']}/pages/0/image", headers=headers).status_code == 404
+
+        asyncio.run(isolated_storage.put(figure_key(doc["user_id"], doc["id"], "000.png"), b"\x89PNG", "image/png"))
+        figure = client.get(f"/api/documents/{doc['id']}/figures/000.png", headers=headers)
+        assert figure.status_code == 200 and figure.content == b"\x89PNG"
+
+        other = _login(client, "other@example.com")
+        assert client.get(f"/api/documents/{doc['id']}/download", headers=other).status_code == 404
+
+        assert client.delete(f"/api/documents/{doc['id']}", headers=headers).status_code in (200, 204)
+        isolated_storage._cache.clear()
+        for key in (document_key(doc["user_id"], doc["id"]), figure_key(doc["user_id"], doc["id"], "000.png")):
+            with pytest.raises(StorageError):
+                isolated_storage.backend.get(key)
+        assert not isolated_storage.backend._path(document_prefix(doc["user_id"], doc["id"])).exists()
+
+    def test_chat_attachment_shared_and_cleaned_up(self, client, isolated_storage, monkeypatch):
+        from app.ai.llm import llm_manager
+        from app.services.storage import StorageError, chat_attachment_key
+        import json
+
+        async def fake_generate(*args, **kwargs):
+            return "Offline test response"
+
+        monkeypatch.setattr(llm_manager, "generate", fake_generate)
+        headers = _login(client)
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+
+        assert client.post("/api/conversations/attachments", headers=headers,
+                           files={"file": ("fake.png", b"<html>not an image</html>", "image/png")}).status_code == 422
+
+        uploaded = client.post("/api/conversations/attachments", headers=headers,
+                               files={"file": ("bai tap.png", png, "image/png")})
+        assert uploaded.status_code == 201
+        attachment = uploaded.json()
+        assert attachment["type"] == "image/png"
+
+        other = _login(client, "other@example.com")
+        assert client.get(f"/api/conversations/attachments/{attachment['id']}", headers=other).status_code == 404
+        got = client.get(f"/api/conversations/attachments/{attachment['id']}", headers=headers)
+        assert got.status_code == 200 and got.content == png
+
+        chat = client.post("/api/conversations/chat", headers=headers, json={
+            "content": "Giải giúp bài này", "mode": "chat", "attachment_ids": [attachment["id"]],
+        }).json()
+        conversation_id = chat["message"]["conversation_id"]
+        messages = client.get(f"/api/conversations/{conversation_id}/messages", headers=headers).json()["messages"]
+        user_message = next(m for m in messages if m["role"] == "user")
+        assert json.loads(user_message["message_metadata"])["attachments"][0]["id"] == attachment["id"]
+
+        assert client.delete(f"/api/conversations/{conversation_id}", headers=headers).status_code == 204
+        isolated_storage._cache.clear()
+        with pytest.raises(StorageError):
+            isolated_storage.backend.get(chat_attachment_key(_user_id(client, headers), attachment["id"]))
+
+    def test_local_storage_rejects_path_traversal(self, isolated_storage):
+        with pytest.raises(ValueError):
+            isolated_storage.backend.put("../outside.txt", b"x", "text/plain")

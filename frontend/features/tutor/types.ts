@@ -97,6 +97,7 @@ export interface ChatRequest {
   mode?: "chat" | "rag";
   document_ids?: string[];
   subject_id?: string;
+  attachment_ids?: string[];
 }
 
 export interface ChatResponse {

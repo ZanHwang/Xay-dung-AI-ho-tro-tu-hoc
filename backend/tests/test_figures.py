@@ -17,7 +17,6 @@ any OpenAI client or Qdrant connection.
 """
 import os
 import sys
-import tempfile
 import uuid
 
 import pytest
@@ -66,21 +65,16 @@ async def test_inspect_top_figure_inspects_regardless_of_question_wording():
     """No keyword gate anymore: a plain-text question (no figure/chart/table
     word in it) still triggers vision when the top RAG result is
     figure-backed - retrieval relevance is the only signal used."""
-    import app.config as C
     from unittest import mock
+    from app.services.storage import storage, figure_key
 
     user_id = uuid.uuid4()
     doc_id = uuid.uuid4()
-    tmp = tempfile.mkdtemp()
-    fig_dir = os.path.join(tmp, str(user_id), "figures", str(doc_id))
-    os.makedirs(fig_dir, exist_ok=True)
-    open(os.path.join(fig_dir, "001.png"), "wb").write(b"\x89PNG fake")
+    await storage.put(figure_key(user_id, doc_id, "001.png"), b"\x89PNG fake", "image/png")
 
     results = [{"content": "x", "figure": "001.png", "document_id": str(doc_id)}]
 
-    with mock.patch.object(__import__("app.ai.figures", fromlist=["os"]).os, "getcwd", return_value=tmp), \
-         mock.patch.object(C.settings, "object_storage_bucket", ""), \
-         mock.patch.object(__import__("app.ai.figures", fromlist=["inspect_figure"]), "inspect_figure",
+    with mock.patch.object(__import__("app.ai.figures", fromlist=["inspect_figure"]), "inspect_figure",
                            new=mock.AsyncMock(return_value="Đồ thị F1 theo ngưỡng")) as m:
         out = await inspect_top_figure(user_id, "định nghĩa tam giác là gì?", results)
 
@@ -92,24 +86,19 @@ async def test_inspect_top_figure_inspects_regardless_of_question_wording():
 async def test_inspect_top_figure_skips_results_with_no_figure_until_one_has_it():
     """Walks results in relevance order and inspects the FIRST one that
     actually carries a figure, not necessarily the top-ranked result."""
-    import app.config as C
     from unittest import mock
+    from app.services.storage import storage, figure_key
 
     user_id = uuid.uuid4()
     doc_id = uuid.uuid4()
-    tmp = tempfile.mkdtemp()
-    fig_dir = os.path.join(tmp, str(user_id), "figures", str(doc_id))
-    os.makedirs(fig_dir, exist_ok=True)
-    open(os.path.join(fig_dir, "002.png"), "wb").write(b"\x89PNG fake")
+    await storage.put(figure_key(user_id, doc_id, "002.png"), b"\x89PNG fake", "image/png")
 
     results = [
         {"content": "no figure here", "figure": None, "document_id": str(doc_id)},
         {"content": "x", "figure": "002.png", "document_id": str(doc_id)},
     ]
 
-    with mock.patch.object(__import__("app.ai.figures", fromlist=["os"]).os, "getcwd", return_value=tmp), \
-         mock.patch.object(C.settings, "object_storage_bucket", ""), \
-         mock.patch.object(__import__("app.ai.figures", fromlist=["inspect_figure"]), "inspect_figure",
+    with mock.patch.object(__import__("app.ai.figures", fromlist=["inspect_figure"]), "inspect_figure",
                            new=mock.AsyncMock(return_value="Bảng số liệu")) as m:
         out = await inspect_top_figure(user_id, "giải thích đoạn văn trên", results)
 

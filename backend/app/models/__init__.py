@@ -11,6 +11,7 @@ from app.models.review import Review
 from app.models.essay import Essay
 from app.models.class_room import ClassRoom, Enrollment
 from app.models.topic_lesson import TopicLesson
+from app.models.chat_attachment import ChatAttachment
 
 __all__ = [
     "User",
@@ -33,4 +34,5 @@ __all__ = [
     "ClassRoom",
     "Enrollment",
     "TopicLesson",
+    "ChatAttachment",
 ]

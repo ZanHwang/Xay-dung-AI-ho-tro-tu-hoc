@@ -166,6 +166,7 @@ export function useConversations(userId: string) {
             subject_id: conversation.subjectId ?? undefined,
             mode,
             ...(documentIds.size > 0 ? { document_ids: [...documentIds] } : {}),
+            ...(images.length > 0 ? { attachment_ids: images.map((file) => file.id) } : {}),
           });
           reply = response.message.content;
           // Track whether this reply was grounded in retrieved documents so the
@@ -218,10 +219,9 @@ export function useConversations(userId: string) {
   }
 
   async function remove(id: string) {
-    const images = store.getSnapshot().conversations.find((item) => item.id === id)?.messages.flatMap((message) => [...message.images ?? [], ...message.documents ?? []]) ?? [];
     store.remove(id);
 
-    // Also delete from API if in API mode
+    // Deleting the conversation on the server also removes its attachments.
     if (!isDemoMode) {
       try {
         await chatApi.deleteConversation(id);
@@ -229,10 +229,6 @@ export function useConversations(userId: string) {
         console.error("Failed to delete conversation from API:", err);
       }
     }
-
-    await removeChatImages(images).catch(() => {
-      setErrors((current) => ({ ...current, cleanup: "Đã xóa chat nhưng chưa xóa được một số tệp trên thiết bị." }));
-    });
   }
 
   return {

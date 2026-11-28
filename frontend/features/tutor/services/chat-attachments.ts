@@ -1,5 +1,6 @@
-import { addSubjectDocuments } from "@/features/subjects/services/document.service";
-import { CHAT_IMAGES_GROUP, MAX_IMAGE_BYTES, validateChatImages } from "./chat-images";
+import { httpClient } from "@/services/http-client";
+import type { ChatImage } from "../types";
+import { MAX_IMAGE_BYTES, removeChatImages, validateChatImages } from "./chat-images";
 
 // PDF only - document attachments are uploaded + indexed through the same
 // backend pipeline as subject documents (see document-api.ts), which only
@@ -24,6 +25,18 @@ export async function saveChatAttachments(files: File[]) {
     try { const bitmap = await createImageBitmap(file); bitmap.close(); }
     catch { throw new Error(`Không đọc được ảnh “${file.name}”. Hãy chọn ảnh hợp lệ.`); }
   }
-  // Save all files atomically; documents are downloads, never rendered as executable HTML.
-  return (await addSubjectDocuments(CHAT_IMAGES_GROUP, files)).map(({ id, name, type, size }) => ({ id, name, type, size }));
+  // Upload to the server (shared storage) so the conversation shows these on
+  // every device. If one upload fails, drop the ones already stored.
+  const saved: ChatImage[] = [];
+  try {
+    for (const file of files) {
+      const body = new FormData();
+      body.append("file", file);
+      saved.push(await httpClient.post<ChatImage>("/conversations/attachments", body));
+    }
+  } catch (error) {
+    await removeChatImages(saved).catch(() => undefined);
+    throw error;
+  }
+  return saved;
 }

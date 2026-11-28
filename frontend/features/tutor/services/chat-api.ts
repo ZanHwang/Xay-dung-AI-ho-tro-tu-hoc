@@ -2,6 +2,7 @@ import { httpClient } from "@/services/http-client";
 import type {
   ApiConversation,
   ApiMessage,
+  ChatImage,
   ChatRequest,
   ChatResponse,
   Conversation,
@@ -36,9 +37,20 @@ function mapMessage(api: ApiMessage): ChatMessage {
   // same way a live reply does.
   let sources: MessageSource[] | undefined;
   let grounded: boolean | undefined;
+  let images: ChatImage[] | undefined;
+  let documents: ChatImage[] | undefined;
   if (api.message_metadata) {
     try {
       const meta: unknown = JSON.parse(api.message_metadata);
+      // User messages carry {"attachments": [...]} - files kept on the server,
+      // so a conversation shows its images/PDFs on every device.
+      const attachments = meta && typeof meta === "object" && Array.isArray((meta as { attachments?: unknown[] }).attachments)
+        ? (meta as { attachments: ChatImage[] }).attachments.filter((item) => item && typeof item.id === "string")
+        : [];
+      if (attachments.length) {
+        images = attachments.filter((item) => item.type.startsWith("image/"));
+        documents = attachments.filter((item) => !item.type.startsWith("image/"));
+      }
       const rawSources =
         meta && typeof meta === "object" && Array.isArray((meta as { sources?: unknown[] }).sources)
           ? (meta as { sources: unknown[] }).sources
@@ -69,6 +81,8 @@ function mapMessage(api: ApiMessage): ChatMessage {
     created_at: api.created_at,
     sources,
     grounded,
+    images,
+    documents,
   };
 }
 

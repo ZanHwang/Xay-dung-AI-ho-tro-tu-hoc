@@ -30,6 +30,19 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 @pytest.fixture(autouse=True)
+def isolated_storage(tmp_path):
+    """Every test gets its own empty local storage - never R2 or the dev folder."""
+    from app.services.storage import storage, LocalStorage
+    storage._backend = LocalStorage(str(tmp_path / "storage"))
+    storage._cache.clear()
+    storage._cache_bytes = 0
+    yield storage
+    storage._backend = None
+    storage._cache.clear()
+    storage._cache_bytes = 0
+
+
+@pytest.fixture(autouse=True)
 def no_external_ai(monkeypatch):
     """Tests must never fall through to a real AI call - mock explicitly."""
     from app.ai.llm import OpenAIProvider, AnthropicProvider

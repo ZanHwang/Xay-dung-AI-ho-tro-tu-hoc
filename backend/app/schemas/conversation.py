@@ -66,6 +66,16 @@ class ChatRequest(BaseModel):
     mode: str = Field(default="chat")  # chat, rag
     document_ids: Optional[List[UUID]] = None
     subject_id: Optional[UUID] = None
+    # Uploaded first via POST /conversations/attachments; recorded on the
+    # user message so the conversation shows them on every device.
+    attachment_ids: Optional[List[UUID]] = None
+
+
+class ChatAttachmentResponse(BaseModel):
+    id: UUID
+    name: str
+    type: str
+    size: int
 
 
 class ChatResponse(BaseModel):

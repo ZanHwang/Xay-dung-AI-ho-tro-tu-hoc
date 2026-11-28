@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateChatImages, MAX_IMAGE_BYTES, saveChatImages } from "./chat-images";
+import { validateChatImages, MAX_IMAGE_BYTES } from "./chat-images";
 import { generateTutorReply } from "./tutor.service";
 import { validateChatAttachments, saveChatAttachments } from "./chat-attachments";
 
@@ -21,10 +21,6 @@ test("chat attachments enforce count, format and size limits", () => {
   assert.throws(() => validateChatImages([new File(["svg"], "x.svg", { type: "image/svg+xml" })]), /JPG/);
   assert.throws(() => validateChatImages([new File([], "empty.png", { type: "image/png" })]), /10 MB/);
   assert.throws(() => validateChatImages([new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], "large.png", { type: "image/png" })]), /10 MB/);
-});
-
-test("text-only chat needs neither image decoding nor IndexedDB", async () => {
-  assert.deepEqual(await saveChatImages([]), []);
 });
 
 test("mock tutor does not claim to read an attached exercise", async () => {

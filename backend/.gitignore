@@ -16,8 +16,9 @@ venv/
 *.db
 !**/fixtures/*.db
 
-# Locally stored uploads (user documents, generated figures) - created on
-# demand by DocumentService via os.makedirs(), never needs to pre-exist here.
+# Local file storage used when R2 isn't configured (app/services/storage.py),
+# plus the old pre-R2 uploads folder.
+/storage/
 /documents/
 
 # Editors / OS

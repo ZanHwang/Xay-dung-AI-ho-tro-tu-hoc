@@ -3,12 +3,11 @@
 Moved out of the RAG orchestrator so the reading workspace (document-scoped
 Q&A) can reuse the exact same "look at the top figure-backed hit" flow.
 """
-import os
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from app.ai.vision import inspect_figure
-from app.config import settings
+from app.services.storage import storage, figure_key
 
 
 async def inspect_top_figure(
@@ -38,29 +37,16 @@ async def inspect_top_figure(
     for result in search_results:
         if not result.get("figure"):
             continue
-        # result["figure"] is just the stored filename (e.g. "000.png");
-        # the path mirrors the service's layout:
-        #   <bucket>/<user_id>/figures/<document_id>/<filename>
+        # result["figure"] is just the stored filename (e.g. "000.png"),
+        # resolved under the document's figure key prefix (storage.figure_key).
         doc_id = result.get("document_id")
         if not doc_id:
             continue
-        figure_dir = os.path.join(
-            os.getcwd(),
-            settings.object_storage_bucket,
-            str(user_id),
-            "figures",
-            str(doc_id),
-        )
-        filename = os.path.basename(result["figure"])
-        absolute_path = os.path.join(figure_dir, filename)
-        if not os.path.exists(absolute_path):
+        filename = result["figure"]
+        image = await storage.try_get(figure_key(user_id, doc_id, filename))
+        if image is None:
             continue
-        try:
-            with open(absolute_path, "rb") as f:
-                image = f.read()
-        except OSError:
-            continue
-        mime = "image/jpeg" if absolute_path.lower().endswith((".jpg", ".jpeg")) else "image/png"
+        mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
         return await inspect_figure(
             question=message,
             context=result.get("content", "")[:600],
