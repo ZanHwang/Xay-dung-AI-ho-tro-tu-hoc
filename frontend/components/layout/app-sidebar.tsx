@@ -12,24 +12,29 @@ type Props = {
   onNavigate: (page: NavKey) => void;
 };
 
-// v2 shell: cream sidebar, Lexend brand mark, .nav-item rows. On mobile the
-// parent layout turns the column into a top strip, so the nav renders as a
-// horizontal strip <md and a vertical list at md+.
+// The notebook cover: nav items are index tabs, the open one is a sheet of
+// paper joined to the page. On mobile the parent layout turns the column into a
+// top strip, so the nav renders as a horizontal strip <md and a list at md+.
 export function AppSidebar({ user, onLogout, activePage, onNavigate }: Props) {
   return (
-    <aside className="flex shrink-0 flex-col border-b border-border bg-background md:h-full md:w-64 md:border-b-0 md:border-r">
-      <div className="flex items-center justify-between gap-3 px-5 py-4 md:block">
+    <aside className="board flex shrink-0 flex-col md:h-full md:w-60">
+      <div className="flex items-center justify-between gap-3 py-3 pl-5 pr-3 md:block md:py-5">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             <BookOpen className="size-4" />
           </span>
           <span>TuHoc</span>
         </div>
-        <p className="meta truncate md:mt-2">{user.name}</p>
+        <div className="flex min-w-0 items-center gap-2 md:hidden">
+          <p className="truncate text-sm">{user.name}</p>
+          <button type="button" onClick={onLogout} className="nav-item" style={{ width: "auto" }} aria-label="Đăng xuất">
+            <LogOut className="size-5" aria-hidden="true" />
+          </button>
+        </div>
+        <p className="mt-2 hidden truncate md:block">{user.name}</p>
       </div>
 
-      <nav className="overflow-x-auto px-3 pb-3 md:flex-1 md:overflow-y-auto">
-        <p className="nav-section hidden md:block">Học tập</p>
+      <nav className="overflow-x-auto px-3 md:flex-1 md:overflow-y-auto md:pr-0">
         <ul className="flex gap-1 md:flex-col" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {navigationItems.map((item) => (
             <li key={item.id} className="shrink-0">
@@ -49,8 +54,8 @@ export function AppSidebar({ user, onLogout, activePage, onNavigate }: Props) {
         </ul>
       </nav>
 
-      <div className="px-3 pb-3 md:mt-auto md:border-t md:pt-3">
-        <button type="button" onClick={onLogout} className="nav-item" style={{ width: "100%", marginTop: 4 }}>
+      <div className="hidden px-3 pb-3 md:block">
+        <button type="button" onClick={onLogout} className="nav-item">
           <span className="ic" aria-hidden="true">
             <LogOut className="size-5" />
           </span>

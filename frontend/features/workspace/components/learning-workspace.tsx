@@ -27,7 +27,9 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
   const dueReviews = useDueReviews();
   const workspace = useLearningWorkspace(chats.store.startNew);
 
-  const pageTitle = workspace.selectedSubject?.name ?? pageTitles[workspace.activePage];
+  // A subject's own name heads its page (on the notebook label), so the top bar
+  // only names the section.
+  const pageTitle = pageTitles[workspace.activePage];
 
   // `chats` is instantiated once here and never remounts, so its own list
   // fetch only ever runs on first load (see use-conversations.ts::refresh) -
@@ -82,6 +84,7 @@ export function LearningWorkspace({ user, onLogout }: { user: UserProfile; onLog
               conversations={chats.conversations}
               onNavigate={workspace.navigate}
               onOpenSubject={workspace.openSubject}
+              onCreateSubject={workspace.addSubject}
               onViewQuiz={overlay.open}
               onOpenReview={overlay.openDueDialog}
               onOpenConversation={(id) => {

@@ -45,17 +45,17 @@ type UploadItem = { file: File; progress: number; error?: string };
 function statusLabel(status: DocumentStatus): string {
   switch (status) {
     case "uploading":
-      return "Đang upload";
+      return "Đang tải lên";
     case "uploaded":
       return "Đã tải lên";
     case "extracting":
-      return "Đang trích xuất";
+      return "Đang đọc file";
     case "ocr_processing":
-      return "Đang OCR";
+      return "Đang đọc chữ trong ảnh";
     case "chunking":
-      return "Đang phân đoạn";
+      return "Đang chia nhỏ nội dung";
     case "embedding":
-      return "Đang tạo embedding";
+      return "Đang lập chỉ mục";
     case "ready":
       return "Sẵn sàng";
     case "failed":
@@ -184,27 +184,25 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
   }
 
   return (
-    <section className="card" style={{ marginTop: 24 }} aria-label="Tài liệu môn học">
-      <h3 className="row-between" style={{ marginBottom: 16 }}>
-        <span>Tài liệu môn học</span>
-      </h3>
-      <DocumentPicker files={files} onChange={setFiles} disabled={busy} />
-      <Button
-        className="btn-accent"
-        style={{ marginTop: 12 }}
-        disabled={busy || loading || !files.length}
-        onClick={() => void handleUpload()}
-      >
-        {busy ? (
-          <>
-            <Loader2 className="animate-spin" /> Đang tải lên...
-          </>
-        ) : (
-          <>
-            <FileUp /> Tải tài liệu lên máy chủ{files.length ? ` (${files.length})` : ""}
-          </>
-        )}
-      </Button>
+    <section aria-label="Tài liệu môn học">
+      <div className="upload-box">
+        <DocumentPicker files={files} onChange={setFiles} disabled={busy} />
+        <Button
+          className="mt-3"
+          disabled={busy || loading || !files.length}
+          onClick={() => void handleUpload()}
+        >
+          {busy ? (
+            <>
+              <Loader2 className="animate-spin" /> Đang tải lên...
+            </>
+          ) : (
+            <>
+              <FileUp /> Tải lên{files.length ? ` (${files.length})` : ""}
+            </>
+          )}
+        </Button>
+      </div>
 
       {uploads.length > 0 && (
         <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 8 }} aria-label="Tiến trình upload">
@@ -250,7 +248,7 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
         </div>
       ) : null}
       {notice ? (
-        <p role="status" className="meta" style={{ marginTop: 12, color: "var(--accent-strong)" }}>
+        <p role="status" className="ok" style={{ marginTop: 12 }}>
           {notice}
         </p>
       ) : null}
@@ -263,18 +261,15 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
         </p>
       ) : (
         <div className="scroll-list" style={{ marginTop: 20 }}>
-          {documents.map((document, index) => (
-            <div key={document.id} className="list-row" style={{ flexWrap: "wrap", border: index === documents.length - 1 ? 0 : "1px solid var(--border)" }}>
+          {documents.map((document) => (
+            <div key={document.id} className="list-row wrap">
+              <FileText className="shrink-0" style={{ color: "var(--accent)" }} aria-hidden="true" />
               <div className="grow">
                 <p className="title">{document.filename}</p>
-                <div className="meta" style={{ marginTop: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                <div className="meta" style={{ marginTop: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                  <span className={statusBadgeClass(document.status)}>{statusLabel(document.status)}</span>
                   <span>{formatFileSize(document.file_size)}</span>
-                  <span>·</span>
-                  <span style={{ textTransform: "uppercase" }}>{document.file_type || "?"}</span>
-                  <span>·</span>
-                  <span className={statusBadgeClass(document.status)} style={{ height: 20 }}>
-                    {statusLabel(document.status)}
-                  </span>
+                  {document.file_type?.toLowerCase() !== "pdf" ? <span>{document.file_type?.toUpperCase() || "?"}</span> : null}
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -333,6 +328,7 @@ export function SubjectDocuments({ subjectId }: { subjectId: string }) {
                   size="sm"
                   disabled={busy}
                   onClick={() => setDeleting(document)}
+                  style={{ color: "var(--error)" }}
                   aria-label={`Xóa ${document.filename}`}
                 >
                   Xóa

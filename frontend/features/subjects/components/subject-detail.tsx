@@ -10,7 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { Subject } from "@/features/subjects/types";
+import { accentToColor, type Subject, type SubjectAccent, type UpdateSubjectInput } from "@/features/subjects/types";
+import { CoverPicker } from "./cover-picker";
 import { SubjectDocuments } from "./subject-documents";
 import { SubjectQuizSummary } from "@/features/quiz/components/subject-quiz-summary";
 import type { QuizController } from "@/features/quiz/hooks/use-quizzes";
@@ -21,7 +22,7 @@ type SubjectDetailProps = {
   subject: Subject;
   onBack: () => void;
   onAskTutor: (id: string) => void;
-  onUpdate: (id: string, data: { name?: string; description?: string }) => Promise<void>;
+  onUpdate: (id: string, data: UpdateSubjectInput) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 };
 
@@ -29,19 +30,20 @@ type TabKey = "documents" | "quiz" | "path";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "documents", label: "Tài liệu" },
-  { key: "quiz", label: "Quiz" },
   { key: "path", label: "Lộ trình" },
+  { key: "quiz", label: "Quiz" },
 ];
 
-// v2 layout: the subject detail is tabbed (Tài liệu | Quiz | Lộ trình)
-// instead of a long vertical stack. The "Đọc" tab was removed — each
-// document row in SubjectDocuments already has its own "Đọc" button.
+// The subject's notebook cover heads the page; its index tabs switch between
+// Tài liệu | Lộ trình | Quiz. Each document row in SubjectDocuments has its own
+// "Đọc" button, so there is no separate reading tab.
 export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete, quizzes }: SubjectDetailProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("documents");
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editName, setEditName] = useState(subject.name);
   const [editDescription, setEditDescription] = useState(subject.description ?? "");
+  const [editCover, setEditCover] = useState<SubjectAccent>(subject.accent);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editError, setEditError] = useState("");
@@ -51,7 +53,11 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
     setSaving(true);
     setEditError("");
     try {
-      await onUpdate(subject.id, { name: editName.trim(), description: editDescription.trim() });
+      await onUpdate(subject.id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        color: editCover !== subject.accent ? accentToColor(editCover) : undefined,
+      });
       setEditing(false);
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Không thể cập nhật môn học.");
@@ -74,66 +80,54 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="btn btn-ghost btn-sm"
-        style={{ marginBottom: 16, color: "var(--muted)" }}
-      >
-        <ArrowLeft /> Quay lại danh sách
+    <div className="page">
+      <button type="button" onClick={onBack} className="link-btn mb-3 gap-2">
+        <ArrowLeft className="size-4" aria-hidden="true" /> Tất cả môn học
       </button>
 
-      <div style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "var(--surface)" }}>
+      <div className={`subj-cover cover-${subject.accent}`}>
         <div className="subj-head">
-          <div className="row-between">
-            <div className="flex items-start gap-4">
-              <span className={`subj-ic subj-${subject.accent}`} style={{ width: 56, height: 56, fontSize: 18, marginBottom: 0 }}>
-                {subject.shortName}
-              </span>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 24 }}>{subject.name}</h2>
-                <p className="sub" style={{ marginTop: 8, maxWidth: "36ch" }}>{subject.description}</p>
-              </div>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <Button
-                onClick={() => {
-                  setEditName(subject.name);
-                  setEditDescription(subject.description ?? "");
-                  setEditError("");
-                  setEditing(true);
-                }}
-                variant="outline"
-                size="sm"
-                aria-label={`Sửa môn học ${subject.name}`}
-              >
-                <Pencil /> Sửa
-              </Button>
-              <Button
-                onClick={() => {
-                  setEditError("");
-                  setConfirmDelete(true);
-                }}
-                variant="outline"
-                size="sm"
-                style={{ color: "var(--error)", borderColor: "var(--error)" }}
-                aria-label={`Xóa môn học ${subject.name}`}
-              >
-                <Trash2 /> Xóa
-              </Button>
-            </div>
+          <div className="nhan-vo">
+            <h2 className="name">{subject.name}</h2>
+            {subject.description ? <p>{subject.description}</p> : null}
           </div>
-          <Button onClick={() => onAskTutor(subject.id)} className="btn-accent" style={{ marginTop: 20 }}>
-            <MessageCircle /> Hỏi AI Tutor về môn này
-          </Button>
+          <div className="subj-actions">
+            <button type="button" className="cover-btn solid" onClick={() => onAskTutor(subject.id)}>
+              <MessageCircle className="size-4" aria-hidden="true" /> Hỏi AI về môn này
+            </button>
+            <button
+              type="button"
+              className="cover-btn"
+              onClick={() => {
+                setEditName(subject.name);
+                setEditDescription(subject.description ?? "");
+                setEditCover(subject.accent);
+                setEditError("");
+                setEditing(true);
+              }}
+              aria-label={`Sửa môn học ${subject.name}`}
+            >
+              <Pencil className="size-4" aria-hidden="true" /> Sửa
+            </button>
+            <button
+              type="button"
+              className="cover-btn"
+              onClick={() => {
+                setEditError("");
+                setConfirmDelete(true);
+              }}
+              aria-label={`Xóa môn học ${subject.name}`}
+            >
+              <Trash2 className="size-4" aria-hidden="true" /> Xóa
+            </button>
+          </div>
         </div>
 
-        {/* Tabs */}
         <div role="tablist" aria-label="Nội dung môn học" className="tabs">
           {TABS.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               role="tab"
               aria-selected={activeTab === tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -143,32 +137,32 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="tabpanel">
-          {activeTab === "documents" && (
-            <div key={`docs-${subject.id}`}>
-              <SubjectDocuments subjectId={subject.id} />
-            </div>
-          )}
-          {activeTab === "quiz" && (
-            <div key={`quiz-${subject.id}`}>
-              <SubjectQuizSummary subject={subject} quizzes={quizzes} />
-            </div>
-          )}
-          {activeTab === "path" && (
-            <div key={`path-${subject.id}`}>
-              <PathTab subjectId={subject.id} quizzes={quizzes} />
-            </div>
-          )}
-        </div>
+      <div className="tabpanel" role="tabpanel">
+        {activeTab === "documents" && (
+          <div key={`docs-${subject.id}`}>
+            <SubjectDocuments subjectId={subject.id} />
+          </div>
+        )}
+        {activeTab === "quiz" && (
+          <div key={`quiz-${subject.id}`}>
+            <SubjectQuizSummary subject={subject} quizzes={quizzes} />
+          </div>
+        )}
+        {activeTab === "path" && (
+          <div key={`path-${subject.id}`}>
+            <PathTab subjectId={subject.id} quizzes={quizzes} />
+          </div>
+        )}
       </div>
 
       {/* Edit dialog */}
       <Dialog open={editing} onOpenChange={(next) => { if (!saving) setEditing(next); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90svh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa môn học</DialogTitle>
-            <DialogDescription>Đổi tên hoặc mô tả cho môn học.</DialogDescription>
+            <DialogDescription>Đổi tên, mô tả hoặc màu bìa của môn học.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
@@ -197,6 +191,7 @@ export function SubjectDetail({ subject, onBack, onAskTutor, onUpdate, onDelete,
                 />
               </label>
             </div>
+            <CoverPicker value={editCover} onChange={setEditCover} disabled={saving} />
             {editError ? (
               <div className="error-box">
                 <p>{editError}</p>

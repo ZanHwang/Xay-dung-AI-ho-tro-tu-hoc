@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Lock, Map } from "lucide-react";
+import { Check, Lock, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { QuizController } from "@/features/quiz/hooks/use-quizzes";
 import { QuizOverlay } from "@/features/quiz/components/quiz-overlay";
@@ -11,7 +11,7 @@ import { TopicLearnDialog } from "./topic-learn-dialog";
 const COMPLETION_THRESHOLD = 70;
 
 function stateLabel(item: TopicProgress): string {
-  if (item.state === "done") return `Đã xong · ${item.bestPercent}%`;
+  if (item.state === "done") return `Đã xong, đạt ${item.bestPercent}%`;
   if (item.state === "current") return "Đang học";
   return "Khóa";
 }
@@ -60,13 +60,10 @@ export function PathTab({ subjectId, quizzes }: { subjectId: string; quizzes: Qu
 
   return (
     <section aria-label="Lộ trình môn học">
-      <div className="card">
-        <div className="flex items-center gap-2" style={{ fontSize: 14, fontWeight: 600 }}>
-          <Map className="size-4" style={{ color: "var(--accent-strong)" }} /> Lộ trình của môn
-        </div>
-        <p className="meta" style={{ marginTop: 8 }}>
-          Mỗi tài liệu có lộ trình riêng — học từng chủ đề theo thứ tự rồi luyện tập đạt từ 70%
-          để mở chủ đề tiếp theo TRONG CÙNG tài liệu đó.
+      <div>
+        <p className="sub" style={{ maxWidth: "70ch" }}>
+          Mỗi tài liệu có một lộ trình riêng. Học lần lượt từng chủ đề và luyện đạt từ 70% để mở
+          chủ đề tiếp theo của tài liệu đó.
         </p>
 
         {error ? (
@@ -81,7 +78,7 @@ export function PathTab({ subjectId, quizzes }: { subjectId: string; quizzes: Qu
           </p>
         ) : (
           <>
-            <label className="field" style={{ marginTop: 20 }}>
+            <label className="field" style={{ marginTop: 16, maxWidth: 520 }}>
               Tài liệu
               <select
                 className="input"
@@ -105,38 +102,26 @@ export function PathTab({ subjectId, quizzes }: { subjectId: string; quizzes: Qu
                   const clickable = item.state !== "locked";
                   const needsReview = item.state === "done" && item.recentPercent !== null && item.recentPercent < COMPLETION_THRESHOLD;
                   return (
-                    <div
-                      key={item.topic}
-                      className="list-row"
-                      style={{
-                        flexWrap: "wrap",
-                        border: index === activeGroup.topics.length - 1 ? 0 : "1px solid var(--border)",
-                        opacity: clickable ? 1 : 0.55,
-                      }}
-                    >
-                      <span
-                        className="grid size-9 shrink-0 place-items-center rounded-full"
-                        style={{
-                          background: item.state === "done" ? "var(--accent-soft)" : "var(--surface-2)",
-                          color: item.state === "done" ? "var(--accent-strong)" : "var(--muted)",
-                          fontWeight: 700,
-                        }}
-                      >
+                    <div key={item.topic} className="list-row wrap">
+                      <span className={`step-dot ${item.state}`}>
                         {item.state === "done" ? <Check className="size-4" /> : item.state === "locked" ? <Lock className="size-3.5" /> : index + 1}
                       </span>
                       <span className="grow">
-                        <span className="title block">{item.topic}</span>
+                        <span className="title block">
+                          <span className={item.state === "current" ? "mark-hl" : undefined}>{item.topic}</span>
+                        </span>
                         <span className="sub2 block">
-                          {item.state === "locked" ? `Khóa — hoàn thành "${activeGroup.topics[index - 1]?.topic}" để mở` : stateLabel(item)}
+                          {item.state === "locked" ? `Đang khóa. Hoàn thành "${activeGroup.topics[index - 1]?.topic}" để mở` : stateLabel(item)}
                         </span>
                         {needsReview ? (
-                          <span className="sub2 block" style={{ color: "var(--error)" }}>
-                            ⚠ Lần gần nhất chỉ {item.recentPercent}% — nên ôn lại
+                          <span className="sub2 flex items-center gap-1" style={{ color: "var(--error)" }}>
+                            <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+                            Lần gần nhất chỉ {item.recentPercent}%, nên ôn lại
                           </span>
                         ) : null}
                       </span>
                       {clickable ? (
-                        <Button variant="outline" size="sm" onClick={() => setOpening({ documentId: activeGroup.documentId, topic: item.topic })}>
+                        <Button variant={item.state === "current" ? "default" : "outline"} size="sm" onClick={() => setOpening({ documentId: activeGroup.documentId, topic: item.topic })}>
                           {item.state === "done" ? "Mở lại" : "Học"}
                         </Button>
                       ) : null}

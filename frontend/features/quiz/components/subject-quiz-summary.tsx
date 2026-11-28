@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -89,9 +88,9 @@ export function SubjectQuizSummary({ subject, quizzes }: {
   }
 
   return (
-    <section className="card" style={{ marginTop: 24 }}>
-      <div className="row-between" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h3>Danh sách Quiz</h3>
+    <section aria-label="Quiz của môn">
+      <div className="block-head">
+        <h3>Quiz đã tạo</h3>
         <QuizCreateDialog
           subject={subject}
           quizzes={quizzes}
@@ -99,9 +98,9 @@ export function SubjectQuizSummary({ subject, quizzes }: {
         />
       </div>
       {items.length === 0 ? (
-        <p className="meta" style={{ marginTop: 16 }}>Chưa có quiz nào trong môn này.</p>
+        <p className="empty">Chưa có quiz nào trong môn này. Bấm tạo quiz để có bộ câu hỏi đầu tiên.</p>
       ) : (
-        <div className="scroll-list" style={{ marginTop: 16 }}>
+        <div className="scroll-list">
           {items.map((quiz) => {
             const latest = latestAttemptOf(quiz.id);
             const percent = latest ? gradeQuiz(quiz, latest.answers, latest.questionIds).percent : null;
@@ -110,25 +109,24 @@ export function SubjectQuizSummary({ subject, quizzes }: {
               : null;
 
             return (
-              <div key={quiz.id} className="list-row" style={{ flexWrap: "wrap" }}>
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg" style={{ background: "var(--c-blue-soft)", color: "var(--c-blue-ink)" }}>
-                  <ClipboardList className="size-4" />
-                </span>
+              <div key={quiz.id} className="list-row wrap">
+                {latest ? (
+                  <span className="score-pen"><span className="sr-only">Đạt </span>{percent}%</span>
+                ) : (
+                  <span className="pill pill-grey" style={{ minWidth: 58, justifyContent: "center" }}>Chưa làm</span>
+                )}
                 <span className="grow">
                   <span className="title block">{quiz.title}</span>
-                  <span className="sub2 block" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span className={latest ? "pill pill-green" : "pill pill-grey"} style={{ fontWeight: 600 }}>
-                      {latest ? "Đã làm" : "Chưa làm"}
-                    </span>
-                    <span>{quiz.questions.length} câu{latest ? ` · ${percent}% · ${date}` : ""}</span>
+                  <span className="sub2 block">
+                    {quiz.questions.length} câu{latest ? `, làm ngày ${date}` : ""}
                   </span>
                 </span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                   <Button variant="outline" size="sm" onClick={() => openView(quiz, false)} aria-label={`Xem ${quiz.title}`}>
                     Xem
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => openView(quiz, true)} aria-label={`Làm lại ${quiz.title}`}>
-                    Làm lại
+                  <Button variant="outline" size="sm" onClick={() => openView(quiz, true)} aria-label={`${latest ? "Làm lại" : "Làm bài"} ${quiz.title}`}>
+                    {latest ? "Làm lại" : "Làm bài"}
                   </Button>
                   <Button
                     variant="outline"

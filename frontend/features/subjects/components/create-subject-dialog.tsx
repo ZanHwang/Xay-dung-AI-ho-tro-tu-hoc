@@ -13,16 +13,24 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { CreateSubjectInput } from "@/features/subjects/types";
+import { accentToColor, COVER_OPTIONS, type CreateSubjectInput, type SubjectAccent } from "@/features/subjects/types";
 import { subjectApi } from "@/features/subjects/services/subject-api";
+import { CoverPicker } from "./cover-picker";
 import { DocumentPicker } from "./document-picker";
 
 type CreateSubjectDialogProps = {
   onCreate: (input: CreateSubjectInput, files: File[]) => Promise<unknown>;
+  /** Custom button that opens the dialog (the blank notebook in the grid). */
+  trigger?: React.ReactElement;
 };
 
-export function CreateSubjectDialog({ onCreate }: CreateSubjectDialogProps) {
+function randomCover(): SubjectAccent {
+  return COVER_OPTIONS[Math.floor(Math.random() * COVER_OPTIONS.length)].accent;
+}
+
+export function CreateSubjectDialog({ onCreate, trigger }: CreateSubjectDialogProps) {
   const [open, setOpen] = useState(false);
+  const [cover, setCover] = useState<SubjectAccent>("cyan");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -88,7 +96,7 @@ export function CreateSubjectDialog({ onCreate }: CreateSubjectDialogProps) {
     if (!name.trim() || saving) return;
     setSaving(true); setError("");
     try {
-      await onCreate({ name, description }, files);
+      await onCreate({ name, description, color: accentToColor(cover) }, files);
       setName(""); setDescription(""); setFiles([]); setOpen(false);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Không thể tạo môn học. Hãy thử lại.");
@@ -96,11 +104,13 @@ export function CreateSubjectDialog({ onCreate }: CreateSubjectDialogProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!saving) { setOpen(next); setError(""); } }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!saving) { if (next) setCover(randomCover()); setOpen(next); setError(""); } }}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus /> Tạo môn học
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus /> Tạo môn học
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto">
         <DialogHeader>
@@ -151,6 +161,7 @@ export function CreateSubjectDialog({ onCreate }: CreateSubjectDialogProps) {
               placeholder="Nội dung chính của môn học"
             />
           </label>
+          <CoverPicker value={cover} onChange={setCover} disabled={saving} />
           <DocumentPicker files={files} onChange={setFiles} disabled={saving} />
           {error ? (
             <div role="alert" className="error-box">

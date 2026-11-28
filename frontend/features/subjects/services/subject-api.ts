@@ -6,7 +6,7 @@ import {
   type UpdateSubjectInput,
   type ApiSubject,
   type SubjectListResponse,
-  colorToAccent,
+  subjectAccent,
   createShortName,
 } from "../types";
 
@@ -15,7 +15,7 @@ import {
 // =============================================================================
 
 function mapApiSubject(api: ApiSubject): Subject {
-  const accent = colorToAccent(api.color);
+  const accent = subjectAccent(api.color, api.id);
 
   return {
     // Core fields

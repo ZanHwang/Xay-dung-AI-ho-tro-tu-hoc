@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { subjectApi, getDemoSubjects } from "@/features/subjects/services/subject-api";
-import type {
-  CreateSubjectInput,
-  Subject,
+import {
+  colorToAccent,
+  type CreateSubjectInput,
+  type Subject,
 } from "@/features/subjects/types";
 import type { NavKey } from "@/features/workspace/types";
 import { uploadDocument } from "@/features/subjects/services/document-api";
@@ -155,7 +156,7 @@ export function useLearningWorkspace(onTutorEnter: () => void) {
         progress: 0,
         lessons: 0,
         lastStudied: "Chưa học",
-        accent: "emerald",
+        accent: input.color ? colorToAccent(input.color) : "emerald",
       };
 
       const next = [...subjectsRef.current, newSubject];
@@ -201,7 +202,7 @@ export function useLearningWorkspace(onTutorEnter: () => void) {
     if (isDemo) {
       // Update demo subject locally
       const next = subjectsRef.current.map((s) =>
-        s.id === id ? { ...s, ...input } : s
+        s.id === id ? { ...s, ...input, accent: input.color ? colorToAccent(input.color) : s.accent } : s
       );
       subjectsRef.current = next;
       setSubjects(next);

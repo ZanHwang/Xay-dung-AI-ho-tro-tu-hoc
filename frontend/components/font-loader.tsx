@@ -2,12 +2,12 @@
 
 import { useEffect } from "react";
 
-// JARVIS v2 typography: Lexend (headings) + Be Vietnam Pro (body), both with
-// the Vietnamese subset. Injected into <head> on mount so the rest of the app
-// (server-rendered markup, Next routes) is untouched. Fails open if blocked —
-// the CSS falls back to system-ui.
+// Alegreya Sans (whole UI) + Patrick Hand (notebook labels and red-pen scores),
+// both with the Vietnamese subset. Injected into <head> on mount so the rest of
+// the app (server-rendered markup, Next routes) is untouched. Fails open if
+// blocked — the CSS falls back to system-ui.
 const FONT_STYLESHEET =
-  "https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap";
+  "https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700;800&family=Patrick+Hand&display=swap";
 
 export function FontLoader() {
   useEffect(() => {

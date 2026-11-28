@@ -108,6 +108,29 @@ const COLOR_TO_ACCENT: Record<string, SubjectAccent> = {
   "#10b981": "emerald",
 };
 
+/** Notebook cover choices. The accent is what gets saved (as its hex color);
+ * the cover shade shown on screen comes from `.cover-<accent>` in globals.css. */
+export const COVER_OPTIONS: { accent: SubjectAccent; label: string }[] = [
+  { accent: "cyan", label: "Xanh ngọc" },
+  { accent: "violet", label: "Tím mực" },
+  { accent: "amber", label: "Cam đất" },
+  { accent: "emerald", label: "Xanh lá" },
+];
+
+/** The backend's default color: what a subject has when nobody picked a cover. */
+const UNPICKED_COLOR = "#6366f1";
+
+/**
+ * Cover of a subject: the picked color, or - for subjects that never had one
+ * picked - a fixed choice derived from the id, so every device shows the same.
+ */
+export function subjectAccent(color: string, id: string): SubjectAccent {
+  if (color.toLowerCase() !== UNPICKED_COLOR) return colorToAccent(color);
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return COVER_OPTIONS[hash % COVER_OPTIONS.length].accent;
+}
+
 /**
  * Convert accent to hex color
  */
