@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { X, ClipboardList } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { Quiz } from "../types";
 import type { QuizController } from "../hooks/use-quizzes";
 import { QuizRunner } from "./quiz-runner";
@@ -39,17 +38,17 @@ export function QuizOverlay({ quiz, quizzes, initialAttemptId, onClose, onSwitch
   if (!quiz) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-card">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <span className="grid size-8 place-items-center rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
-          <ClipboardList className="size-4" />
-        </span>
-        <p className="truncate text-sm font-medium">{quiz.title}</p>
-        <Button variant="outline" size="icon" className="ml-auto size-8" onClick={onClose} aria-label="Đóng (Esc)">
-          <X className="size-4" />
-        </Button>
+    <div className="overlay">
+      <div className="overlay-bar">
+        <span className="file-ic" aria-hidden="true"><ClipboardList className="size-5" /></span>
+        <div>
+          <h2>{quiz.title}</h2>
+        </div>
+        <button type="button" className="more" onClick={onClose} aria-label="Đóng (Esc)">
+          <X className="size-5" />
+        </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto" style={{ padding: 24 }}>
+      <div className="overlay-body">
         <QuizRunner quiz={quiz} quizzes={quizzes} initialAttemptId={initialAttemptId} onSwitchQuiz={onSwitchQuiz} autoStart={autoStart} />
       </div>
     </div>

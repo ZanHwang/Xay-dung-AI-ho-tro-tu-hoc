@@ -39,10 +39,10 @@ export function CameraCapture({ onCapture, onClose }: { onCapture: (file: File) 
       onCapture(new File([blob], `bai-tap-${Date.now()}.jpg`, { type: "image/jpeg" })); onClose();
     }, "image/jpeg", 0.9);
   }
-  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="bg-[#0c1728] text-white sm:max-w-3xl">
+  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="sm:max-w-3xl">
     <DialogHeader><DialogTitle>Chụp ảnh bài tập</DialogTitle><DialogDescription>Đặt đề bài trong khung, chụp rõ chữ. Ảnh chỉ được gửi khi bạn bấm Gửi.</DialogDescription></DialogHeader>
     <video ref={video} muted playsInline onLoadedData={() => setReady(true)} className="max-h-[60svh] w-full rounded-xl bg-black" />
-    {error && <p role="alert" className="text-sm" style={{ color: "#FCA5A5" }}>{error}</p>}
+    {error && <p role="alert" className="err">{error}</p>}
     <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Hủy</Button><Button disabled={!ready || !!error} onClick={capture}>Chụp ảnh</Button></div>
   </DialogContent></Dialog>;
 }

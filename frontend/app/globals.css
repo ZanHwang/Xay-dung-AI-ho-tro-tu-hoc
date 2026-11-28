@@ -733,6 +733,127 @@ textarea.input { min-height: 96px; resize: vertical; }
 .quote { margin: 8px 0; padding: 6px 10px; border-radius: 8px; background: var(--bg); }
 @media (max-width: 1024px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
 
+/* ---------- lớp phủ: làm quiz, học chủ đề, đọc tài liệu ---------- */
+.overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); }
+.overlay-bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 64px; padding: 8px 16px; background: var(--board); }
+.overlay-bar .file-ic { background: #fff; color: var(--accent-strong); }
+.overlay-bar > div { flex: 1; min-width: 0; }
+.overlay-bar h2, .overlay-bar p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overlay-bar h2 { font-size: 20px; }
+.overlay-bar p { font-size: 15px; color: var(--ink-2); }
+.overlay-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 24px 20px 40px;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.overlay-foot { display: flex; flex: none; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+.sheet { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 860px; margin: 0 auto; }
+
+/* làm quiz và xem kết quả */
+.quiz-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px 20px; flex-wrap: wrap;
+  padding: 18px 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.quiz-top > div { flex: 1 1 240px; min-width: 0; }
+.quiz-top h2 { font-size: 22px; }
+.quiz-meter { max-width: 320px; background: var(--surface-2); }
+.quiz-meter span { background: var(--accent); }
+.attempts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.attempt-chip {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 16px;
+  border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface);
+  font: inherit; font-size: 15px; color: var(--ink); cursor: pointer;
+}
+.attempt-chip b { color: var(--red); font-family: var(--font-hand); font-weight: 400; font-size: 19px; }
+.attempt-chip:hover { border-color: var(--accent); }
+.attempt-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.q-card { min-width: 0; margin: 0; padding: 18px 20px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+/* legend nổi để nằm trong khung thay vì cắt ngang viền */
+.q-head { display: flex; float: left; width: 100%; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0; margin-bottom: 4px; }
+.q-head + * { clear: both; }
+.q-num { font-family: var(--font-hand); font-size: 22px; color: var(--accent-strong); }
+.q-text { margin-bottom: 12px; font-size: 18px; font-weight: 700; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answers { margin: 0; padding: 0; list-style: none; }
+.answer { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; }
+.answer .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.answer .key {
+  display: flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 8px; background: var(--surface-2); font-weight: 700; font-size: 14px;
+}
+.answer.right { border-color: var(--accent); background: var(--accent-soft); }
+.answer.right .key { background: var(--accent); color: #fff; }
+.answer.wrong { border-color: var(--error); background: var(--error-soft); }
+.answer.wrong .key { background: var(--error); color: #fff; }
+.answer-note { flex: none; align-self: center; font-size: 14px; font-weight: 800; }
+.q-card .quote { background: #FFF6C9; }
+.answer.right .answer-note { color: var(--accent-strong); }
+.answer.wrong .answer-note { color: var(--error); }
+.option.chosen { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.option.chosen .key { background: var(--accent); color: #fff; }
+.option .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* nút chọn một trong nhiều (phạm vi quiz) */
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice {
+  min-height: 40px; padding: 4px 16px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface);
+  font: inherit; font-size: 15px; color: var(--ink); text-align: left; overflow-wrap: anywhere; cursor: pointer;
+}
+.choice:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--accent); background: var(--accent-soft); }
+.choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+.choice:disabled { opacity: .5; cursor: not-allowed; }
+
+/* học một chủ đề */
+.lesson { padding: 20px 26px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow-wrap: anywhere; }
+.lesson > div { font-size: 18px; }
+.lesson p, .lesson li { line-height: 1.75; }
+.lesson h1, .lesson h2, .lesson h3, .lesson h4 { margin: 14px 0 4px; font-size: 21px; }
+/* trích đoạn: tờ giấy dán vào vở */
+.pasted { position: relative; margin: 12px 0 0; padding: 22px 14px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); box-shadow: 0 5px 14px rgba(40, 60, 40, .1); }
+.pasted figcaption { font-weight: 700; overflow-wrap: anywhere; }
+.pasted img { display: block; width: 100%; max-height: 640px; margin-top: 10px; border: 1px solid var(--border); border-radius: 6px; object-fit: contain; }
+.excerpts { display: flex; flex-direction: column; gap: 14px; }
+.qa { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.qa .bubble-user { align-self: flex-end; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qa .bubble-bot { align-self: flex-start; padding: 10px 16px; border: 1px solid var(--border); border-radius: 14px 14px 14px 4px; background: var(--surface); overflow-wrap: anywhere; }
+.ask-box textarea { flex: 1; min-width: 0; min-height: 44px; padding: 9px 6px; border: 0; outline: 0; background: transparent; font: inherit; line-height: 1.5; color: inherit; resize: none; }
+.ask-box input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 6px; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; }
+
+/* đọc tài liệu */
+.pdf-tools { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.pdf-tools > div { display: flex; align-items: center; gap: 8px; }
+.tool-btn { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.tool-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.tool-btn:disabled { opacity: .4; cursor: default; }
+.page-input { width: 56px; min-height: 40px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); text-align: center; font: inherit; color: inherit; }
+.pdf-area { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 16px; background: var(--surface-2); }
+.read-side { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
+.read-tabs { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0; }
+.read-tabs > .segmented { align-self: stretch; flex: none; margin: 10px 12px 0; }
+.read-tabs .segmented [role="tab"] { flex: 1; }
+.read-foot { flex: none; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.note-card { padding: 10px 14px 12px; border-radius: 4px; background: #FFF6C9; box-shadow: 0 3px 10px rgba(60, 60, 20, .1); }
+.note-card.summary { border: 1px solid var(--border); background: var(--surface); }
+.note-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 15px; }
+.note-head .link-btn { min-height: 36px; font-size: 15px; }
+.note-head .remove { margin-left: auto; color: var(--error); }
+.note-card > p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; }
+
+/* hộp thoại */
+[data-slot="dialog-content"] { border-radius: 14px; }
+[data-slot="dialog-content"] label.field { margin: 0; font-size: 15px; font-weight: 700; }
+[data-slot="dialog-content"] label.field > .input { display: block; margin-top: 6px; font-weight: 400; }
+[data-slot="dialog-content"] label.field > .meta { font-weight: 400; }
+[data-slot="dialog-title"] { font-size: 22px; font-weight: 800; line-height: 1.25; padding-right: 36px; overflow-wrap: anywhere; }
+[data-slot="dialog-content"] > [data-slot="dialog-close"] { top: 14px; right: 14px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; cursor: pointer; }
+[data-slot="dialog-content"] > [data-slot="dialog-close"]:hover { background: var(--surface-2); }
+
+@media (max-width: 480px) {
+  .overlay-body { padding: 16px 12px 32px; }
+  .quiz-top, .q-card, .lesson { padding-left: 14px; padding-right: 14px; }
+  .answer { flex-wrap: wrap; }
+  .answer-note { width: 100%; padding-left: 40px; }
+}
+
 .subj-ic {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 8px; margin-bottom: 12px;
@@ -810,7 +931,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   cursor: pointer; font-family: inherit; color: inherit;
   transition: border-color var(--m-in) var(--ease), background var(--m-in) var(--ease), transform var(--m-press) var(--ease);
 }
-.option:hover:not(:disabled) { border-color: var(--ink); }
+.option:hover:not(:disabled) { border-color: var(--accent); }
 .option:active:not(:disabled) { transform: scale(.99); }
 .option .key {
   flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2);

@@ -43,14 +43,14 @@ export function DocumentViewer({ document, onClose }: { document: ApiDocument; o
   const showPdfFallback = preview?.kind === "pdf" && loaded && !loaded.url;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="flex h-[90svh] w-[calc(100%-2rem)] max-w-6xl flex-col gap-3 overflow-hidden border-border bg-card text-foreground sm:max-w-6xl">
-        <DialogHeader className="shrink-0 pr-8 text-left">
+      <DialogContent className="flex h-[90svh] w-[calc(100%-2rem)] max-w-6xl flex-col gap-3 overflow-hidden sm:max-w-6xl">
+        <DialogHeader className="shrink-0 text-left">
           <DialogTitle className="break-words">{document.filename}</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {formatFileSize(document.file_size)} · Tài liệu của môn học
+            Tài liệu của môn học, {formatFileSize(document.file_size)}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-lg border border-border bg-muted">
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-lg border border-border bg-secondary">
           {error ? <p role="alert" className="err p-6 text-sm">{error}</p> : !loaded
             ? <p role="status" className="meta p-6 text-sm">Đang mở tài liệu...</p> : null}
           {preview?.kind === "pdf" && loaded?.url && (
@@ -78,7 +78,7 @@ export function DocumentViewer({ document, onClose }: { document: ApiDocument; o
           {preview?.kind === "unsupported" && (
             <div className="m-auto max-w-lg p-6 text-center">
               <h3 className="font-semibold text-foreground">Định dạng này chưa hỗ trợ xem trực tiếp</h3>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">Bạn có thể tải file Word, PowerPoint, Excel hoặc định dạng khác về để mở bằng ứng dụng phù thuộc. Hiện hỗ trợ xem PDF, ảnh và văn bản.</p>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">Bạn có thể tải file Word, PowerPoint, Excel hoặc định dạng khác về để mở bằng ứng dụng phù hợp. Hiện hỗ trợ xem PDF, ảnh và văn bản.</p>
             </div>
           )}
         </div>

@@ -28,17 +28,17 @@ import {
   listAnnotations,
   type ReadingAnnotation,
 } from "@/features/reading/services/reading-api";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STATUS_LABEL: Record<DocumentStatus, string> = {
   uploading: "Đang tải lên…",
-  uploaded: "Đã tải lên, đang chuẩn bị xử lý…",
-  extracting: "Đang trích xuất nội dung…",
-  ocr_processing: "Đang OCR trang quét & mô tả hình…",
-  chunking: "Đang cắt chunk…",
-  embedding: "Đang nhúng vector (Gemini)…",
-  ready: "Sẵn sàng.",
+  uploaded: "Đã tải lên, đang chờ xử lý…",
+  extracting: "Đang đọc file…",
+  ocr_processing: "Đang đọc chữ trong ảnh…",
+  chunking: "Đang chia nhỏ nội dung…",
+  embedding: "Đang lập chỉ mục…",
+  ready: "Sẵn sàng",
   failed: "Xử lý thất bại.",
 };
 
@@ -61,6 +61,8 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
   const [busy, setBusy] = useState(false);
 
   const ready = status === "ready";
+  // Phones stack the page above the chat; side by side leaves both unreadable.
+  const narrow = useIsMobile();
 
   // ---- Poll document status until ready / failed --------------------------
   // The overlay is keyed per document in the parent, so this component
@@ -150,44 +152,40 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const statusLine = status === "ready" ? "Sẵn sàng" : STATUS_LABEL[status];
-
   return (
-    <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-card">
+    <div className="overlay">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <span className="grid size-8 place-items-center rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
-          <BookOpen className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{document.filename}</p>
-          <p className="text-[11px] text-muted-foreground">{statusLine}</p>
+      <div className="overlay-bar">
+        <span className="file-ic" aria-hidden="true"><BookOpen className="size-5" /></span>
+        <div>
+          <h2>{document.filename}</h2>
+          <p role="status">{STATUS_LABEL[status]}</p>
         </div>
-        <Button variant="outline" size="icon" className="ml-auto size-8" onClick={onClose} aria-label="Đóng (Esc)">
-          <X className="size-4" />
-        </Button>
+        <button type="button" className="more" onClick={onClose} aria-label="Đóng (Esc)">
+          <X className="size-5" />
+        </button>
       </div>
 
       {/* Body */}
       {status === "failed" ? (
         <div className="grid flex-1 place-items-center p-6">
-          <div style={{ maxWidth: "28rem", border: "1px solid color-mix(in srgb, var(--error) 40%, transparent)", background: "var(--error-soft)", borderRadius: "var(--radius-md)", padding: 20, fontSize: 14 }}>
-            <p style={{ fontWeight: 500, color: "var(--error)" }}>Tài liệu chưa sẵn sàng.</p>
-            <p className="meta" style={{ marginTop: 4 }}>
-              {document.error_message ?? "Không thể index tài liệu này. Hãy xử lý lại trong thư viện môn học."}
+          <div className="error-box" style={{ maxWidth: "28rem" }}>
+            <h3>Tài liệu chưa sẵn sàng</h3>
+            <p>
+              {document.error_message ?? "AI chưa đọc được tài liệu này. Hãy bấm Xử lý lại ở tab Tài liệu của môn."}
             </p>
           </div>
         </div>
       ) : !pdfData ? (
         <div className="grid flex-1 place-items-center">
-          <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Spinner className="size-8" />
             {pdfError ?? "Đang mở PDF…"}
           </div>
         </div>
       ) : (
-        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-          <ResizablePanel defaultSize={62} minSize={30}>
+        <ResizablePanelGroup orientation={narrow ? "vertical" : "horizontal"} className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={narrow ? 50 : 62} minSize={30}>
             <PdfViewer
               data={pdfData}
               currentPage={currentPage}
@@ -201,7 +199,7 @@ export function ReadingView({ document, onClose }: ReadingViewProps) {
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={38} minSize={25}>
+          <ResizablePanel defaultSize={narrow ? 50 : 38} minSize={25}>
             <ReadingChat
               documentId={document.id}
               documentName={document.filename}

@@ -29,23 +29,22 @@ export function DueReviewDialog({ open, quizzes, onClose, onPick }: {
         <DialogHeader>
           <DialogTitle>Câu cần ôn hôm nay</DialogTitle>
           <DialogDescription>
-            Chọn 1 quiz để ôn đúng các câu đến hạn trong quiz đó.
+            Chọn một quiz để ôn các câu đến hạn trong quiz đó.
           </DialogDescription>
         </DialogHeader>
         {quizzes.length === 0 ? (
           <p className="sub">Không có câu nào đến hạn.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="scroll-list">
             {quizzes.map((quiz) => (
               <button
                 key={quiz.quiz_id}
                 type="button"
-                className="list-row"
+                className="row-link"
                 onClick={() => onPick(quiz.quiz_id)}
-                style={{ width: "100%", cursor: "pointer", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", font: "inherit", color: "inherit", textAlign: "left" }}
               >
-                <span className="grow title block">{quiz.title}</span>
-                <span className="pill pill-grey" style={{ flexShrink: 0 }}>{quiz.due_count} câu</span>
+                <span className="grow title">{quiz.title}</span>
+                <span className="pill pill-amber">{quiz.due_count} câu</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </button>
             ))}

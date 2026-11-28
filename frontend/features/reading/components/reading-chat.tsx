@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, Trash2, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChatMessage } from "@/features/tutor/components/chat-message";
+import { Button } from "@/components/ui/button";
 import type { ChatMessage as ChatMessageModel } from "@/features/tutor/types";
 import type {
   ReadingAnnotation,
@@ -224,23 +225,21 @@ export function ReadingChat({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "chat" | "notes")}>
-        <TabsList className="w-full">
+    <div className="read-side">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "chat" | "notes")} className="read-tabs">
+        <TabsList className="segmented">
           <TabsTrigger value="chat">Hỏi AI</TabsTrigger>
           <TabsTrigger value="notes">Ghi chú ({annotations.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col">
-          <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          <div ref={listRef} className="chat-log">
             {messages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Hỏi bất kỳ điều gì về{" "}
-                <span className="font-medium">{documentName}</span> — kể cả
-                yêu cầu tóm tắt cả file hay tóm tắt một khoảng trang. Câu
-                trả lời kèm trích dẫn trang — bấm vào{" "}
-                <span className="font-medium">(trang N)</span> để nhảy tới
-                đúng trang.
+              <p className="sub">
+                Hỏi bất kỳ điều gì về <b className="break-words">{documentName}</b>, kể
+                cả yêu cầu tóm tắt cả file hay một khoảng trang. Câu trả lời
+                kèm trích dẫn trang: bấm vào <span className="mark-hl">trang N</span> để
+                nhảy tới đúng trang.
               </p>
             ) : (
               messages.map((m) => (
@@ -248,25 +247,26 @@ export function ReadingChat({
               ))
             )}
             {busy ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="meta flex items-center gap-2" role="status">
                 <Loader2 className="size-4 animate-spin" /> Đang trả lời…
               </div>
             ) : null}
             {askError ? (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="err">
                 {askError}
               </p>
             ) : null}
           </div>
 
           {/* Input - the single box: ask questions OR summarize */}
-          <div className="border-t border-border p-3">
-            <div className="flex items-end gap-2">
+          <div className="read-foot">
+            <div className="ask-box">
               <textarea
+                aria-label="Câu hỏi về tài liệu"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     ask();
                   }
@@ -274,79 +274,59 @@ export function ReadingChat({
                 disabled={!ready}
                 placeholder={
                   ready
-                    ? "Hỏi về tài liệu này… (vd: “tóm tắt cả file”, “trang 5 nói gì?”)"
+                    ? "Hỏi về tài liệu này… (ví dụ: “trang 5 nói gì?”)"
                     : "Tài liệu đang xử lý…"
                 }
                 rows={2}
-                className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
               />
-              <button
-                type="button"
+              <Button
+                size="icon"
+                className="size-11 shrink-0 rounded-lg"
                 onClick={ask}
                 disabled={!ready || busy || !draft.trim()}
-                className="grid size-10 shrink-0 place-items-center rounded-lg disabled:opacity-40"
-                style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
                 aria-label="Gửi"
               >
                 <Send className="size-4" />
-              </button>
+              </Button>
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="notes" className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
             {sortedAnnotations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Chưa có ghi chú nào. Thêm ghi chú hoặc tóm tắt (qua ô Hỏi AI) ngay bên dưới.
+              <p className="sub">
+                Chưa có ghi chú nào. Viết ghi chú ở ô bên dưới, hoặc nhờ AI tóm tắt trong tab Hỏi AI.
               </p>
             ) : (
               sortedAnnotations.map((a) => (
-                <div key={a.id} className="rounded-lg border border-border p-3">
-                  <div className="mb-1 flex items-center gap-2 text-xs">
-                    <span
-                      className={a.type === "summary" ? "pill pill-violet" : "pill pill-green"}
-                      style={{ height: 20 }}
-                    >
+                <div key={a.id} className={a.type === "summary" ? "note-card summary" : "note-card"}>
+                  <div className="note-head">
+                    <span className={a.type === "summary" ? "pill pill-violet" : "pill pill-green"}>
                       {a.type === "summary" ? "Tóm tắt" : "Ghi chú"}
                     </span>
                     {a.page != null ? (
-                      <button
-                        type="button"
-                        onClick={() => onJumpToPage(a.page!)}
-                        className="jump-link"
-                        style={{ fontSize: 12 }}
-                      >
+                      <button type="button" onClick={() => onJumpToPage(a.page!)} className="link-btn">
                         Trang {a.page}
                       </button>
                     ) : (
-                      <span className="meta" style={{ fontSize: 12 }}>Không rõ trang</span>
+                      <span className="meta">Không rõ trang</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => removeNote(a.id)}
-                      className="ml-auto flex items-center gap-1 text-xs"
-                      style={{ color: "var(--error)", background: "none", border: 0, cursor: "pointer" }}
-                    >
-                      <Trash2 className="size-3.5" /> Xóa
+                    <button type="button" onClick={() => removeNote(a.id)} className="link-btn remove gap-1">
+                      <Trash2 className="size-4" /> Xóa
                     </button>
                   </div>
-                  <p className="whitespace-pre-wrap break-words text-sm">{a.text}</p>
+                  <p>{a.text}</p>
                 </div>
               ))
             )}
           </div>
 
           {/* Add note form - single "Ghi chú" type (merged with "Đánh dấu") */}
-          <div className="border-t border-border p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <label className="text-xs text-muted-foreground" htmlFor="note-text">
-                Ghi chú
-              </label>
-              <span className="ml-auto text-xs text-muted-foreground">
-                Lưu tại trang {currentPage}
-              </span>
-            </div>
+          <div className="read-foot">
+            <label className="meta mb-1 block" htmlFor="note-text">
+              Ghi chú cho trang {currentPage}
+            </label>
             <div className="flex items-end gap-2">
               <textarea
                 id="note-text"
@@ -355,17 +335,12 @@ export function ReadingChat({
                 disabled={!ready}
                 placeholder="Ghi chú của bạn về trang này…"
                 rows={2}
-                className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+                className="input min-w-0 flex-1"
+                style={{ minHeight: 64, resize: "none" }}
               />
-              <button
-                type="button"
-                onClick={saveNote}
-                disabled={!ready || savingNote || !noteText.trim()}
-                className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
-                style={{ background: "var(--accent)" }}
-              >
-                {savingNote ? "Lưu…" : "Lưu"}
-              </button>
+              <Button className="shrink-0" onClick={saveNote} disabled={!ready || savingNote || !noteText.trim()}>
+                {savingNote ? "Đang lưu…" : "Lưu"}
+              </Button>
             </div>
           </div>
         </TabsContent>

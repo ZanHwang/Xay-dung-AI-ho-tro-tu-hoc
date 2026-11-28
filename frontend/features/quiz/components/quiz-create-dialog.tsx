@@ -104,6 +104,9 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
   }
 
   const pickedGroup = groups.find((g) => g.documentId === pickedDocumentId) ?? null;
+  // "Chủ đề khác" stays open after one of its saved topics is picked (the only
+  // way `scope` names a topic without a document), so the choice stays visible.
+  const customOpen = scope !== ALL_KNOWLEDGE && scopeDocumentId === null;
   const filteredKnownTopics = customTopic.trim()
     ? knownTopics.filter((name) => name.toLowerCase().includes(customTopic.trim().toLowerCase()))
     : knownTopics;
@@ -148,7 +151,7 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo Quiz · {subject.name}</DialogTitle>
+          <DialogTitle>Tạo Quiz cho {subject.name}</DialogTitle>
           <DialogDescription>Chọn phạm vi và số câu, AI sẽ tạo bài ngay.</DialogDescription>
         </DialogHeader>
 
@@ -173,28 +176,28 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
 
           <div>
             <p className="label" style={{ marginBottom: 8 }}>Phạm vi</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="choices">
               <button
                 type="button"
+                className="choice"
                 disabled={creating}
+                aria-pressed={scope === ALL_KNOWLEDGE}
                 onClick={() => { setScope(ALL_KNOWLEDGE); setScopeDocumentId(null); setPickedDocumentId(""); }}
-                className={scope === ALL_KNOWLEDGE ? "pill pill-green" : "pill pill-grey"}
-                style={{ cursor: "pointer" }}
               >
                 Tổng hợp
               </button>
               <button
                 type="button"
+                className="choice"
                 disabled={creating}
+                aria-pressed={customOpen}
                 onClick={() => { setScope(CUSTOM_TOPIC); setScopeDocumentId(null); setPickedDocumentId(""); }}
-                className={scope === CUSTOM_TOPIC ? "pill pill-green" : "pill pill-grey"}
-                style={{ cursor: "pointer" }}
               >
                 Chủ đề khác…
               </button>
             </div>
 
-            {scope === CUSTOM_TOPIC ? (
+            {customOpen ? (
               <>
                 <input
                   type="text"
@@ -202,7 +205,7 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
                   style={{ marginTop: 8 }}
                   value={customTopic}
                   disabled={creating}
-                  onChange={(event) => setCustomTopic(event.target.value)}
+                  onChange={(event) => { setCustomTopic(event.target.value); setScope(CUSTOM_TOPIC); }}
                   placeholder="Ví dụ: Entropy, Hồi quy tuyến tính, Tokenization…"
                 />
                 {knownTopics.length > 0 ? (
@@ -210,17 +213,17 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
                     <p className="meta">
                       Chủ đề đã tạo được trước đây — bấm để chọn, hoặc cứ gõ tiếp ở trên nếu đây là chủ đề thực sự mới.
                     </p>
-                    <div className="scroll-chips" style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <div className="scroll-chips choices" style={{ marginTop: 4, padding: 2 }}>
                       {filteredKnownTopics.length === 0 ? (
                         <p className="meta">Không có chủ đề nào khớp.</p>
                       ) : filteredKnownTopics.map((name) => (
                         <button
                           key={name}
                           type="button"
+                          className="choice"
                           disabled={creating}
+                          aria-pressed={scope === name && scopeDocumentId === null}
                           onClick={() => { setScope(name); setScopeDocumentId(null); setPickedDocumentId(""); }}
-                          className={scope === name && scopeDocumentId === null ? "pill pill-green" : "pill pill-grey"}
-                          style={{ cursor: "pointer" }}
                         >
                           {name}
                         </button>
@@ -253,15 +256,15 @@ export function QuizCreateDialog({ subject, quizzes, onCreated }: {
                 </label>
 
                 {pickedGroup ? (
-                  <div className="scroll-chips" style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <div className="scroll-chips choices" style={{ marginTop: 8, padding: 2 }}>
                     {pickedGroup.topics.map((name) => (
                       <button
                         key={name}
                         type="button"
+                        className="choice"
                         disabled={creating}
+                        aria-pressed={scope === name && scopeDocumentId === pickedGroup.documentId}
                         onClick={() => { setScope(name); setScopeDocumentId(pickedGroup.documentId); }}
-                        className={scope === name && scopeDocumentId === pickedGroup.documentId ? "pill pill-green" : "pill pill-grey"}
-                        style={{ cursor: "pointer" }}
                       >
                         {name}
                       </button>

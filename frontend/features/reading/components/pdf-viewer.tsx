@@ -221,20 +221,20 @@ export function PdfViewer({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <div className="flex items-center gap-1.5">
+      <div className="pdf-tools">
+        <div>
           <button
             type="button"
             onClick={() => goTo(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="grid size-8 place-items-center rounded-md border border-border disabled:opacity-40"
+            className="tool-btn"
             aria-label="Trang trước"
           >
             <ChevronLeft className="size-4" />
           </button>
-          <div className="flex items-center gap-1 text-sm">
+          <div className="flex items-center gap-1.5">
             <input
-              className="w-12 rounded-md border border-border bg-background px-1.5 py-0.5 text-center text-sm"
+              className="page-input"
               value={pageValue}
               onFocus={() => {
                 setBuffer(String(currentPage));
@@ -253,28 +253,28 @@ export function PdfViewer({
             type="button"
             onClick={() => goTo(currentPage + 1)}
             disabled={numPages > 0 && currentPage >= numPages}
-            className="grid size-8 place-items-center rounded-md border border-border disabled:opacity-40"
+            className="tool-btn"
             aria-label="Trang sau"
           >
             <ChevronRight className="size-4" />
           </button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div>
           <button
             type="button"
             onClick={() => setScale((s) => Math.max(0.5, s - 0.25))}
-            className="grid size-8 place-items-center rounded-md border border-border"
+            className="tool-btn"
             aria-label="Thu nhỏ"
           >
             <ZoomOut className="size-4" />
           </button>
-          <span className="w-12 text-center text-xs tabular-nums text-muted-foreground">
+          <span className="meta num w-12 text-center">
             {Math.round(scale * 100)}%
           </span>
           <button
             type="button"
             onClick={() => setScale((s) => Math.min(3, s + 0.25))}
-            className="grid size-8 place-items-center rounded-md border border-border"
+            className="tool-btn"
             aria-label="Phóng to"
           >
             <ZoomIn className="size-4" />
@@ -283,9 +283,9 @@ export function PdfViewer({
       </div>
 
       {/* Page canvas */}
-      <div className="relative min-h-0 flex-1 overflow-auto bg-muted/40 p-4">
+      <div className="pdf-area">
         {renderError ? (
-          <p className="text-sm text-destructive">{renderError}</p>
+          <p role="alert" className="err">{renderError}</p>
         ) : (
           <div className="relative mx-auto" style={{ width: "fit-content" }}>
             <div ref={textLayerRef} className="absolute inset-0 z-0 overflow-hidden" />

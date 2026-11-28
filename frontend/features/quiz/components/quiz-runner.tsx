@@ -56,6 +56,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   // knows the NEXT quiz.id change (to the retry quiz) should auto-start,
   // without the parent having to know about it.
   const autoStartNextSwitch = useRef(false);
+  const sheetRef = useRef<HTMLElement>(null);
 
   const draft = quizzes.drafts.find((item) => item.quizId === quiz.id);
   const attempt = quizzes.attempts.find((item) => item.id === attemptId && item.quizId === quiz.id);
@@ -124,6 +125,8 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
       onTakingChange?.(false);
       setConfirmSubmit(false);
       setWrongOnly(false);
+      // The submit button sits at the bottom; bring the score into view.
+      sheetRef.current?.closest(".overlay-body")?.scrollTo({ top: 0 });
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -164,82 +167,95 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
   }
 
   return (
-    <section>
-      <div className="row-between" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h3>{quiz.title}</h3>
-        <div style={{ display: "flex", gap: 12 }}>
-          {!taking ? <Button onClick={start}>{draft ? "Tiếp tục bài đang làm" : attempt ? "Làm lại" : "Bắt đầu làm bài"}</Button> : null}
-          {taking ? <Button variant="ghost" disabled={submitting} onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button> : null}
-        </div>
-      </div>
-
+    <section className="sheet" ref={sheetRef}>
       {error ? (
-        <div role="alert" className="error-box" style={{ marginTop: 12 }}><p>{error}</p></div>
+        <div role="alert" className="error-box"><p>{error}</p></div>
       ) : null}
 
       {!taking && pastAttempts.length > 1 ? (
-        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <span className="meta" style={{ alignSelf: "center" }}>Các lần đã làm:</span>
+        <div className="attempts">
+          <span className="meta">Các lần đã làm:</span>
           {pastAttempts.map((item) => {
             const grade = gradeQuiz(quiz, item.answers, item.questionIds);
-            const active = item.id === attemptId;
             return (
               <button
                 key={item.id}
                 type="button"
+                className="attempt-chip"
+                aria-pressed={item.id === attemptId}
                 onClick={() => { setAttemptId(item.id); setTaking(false); setWrongOnly(false); }}
-                className={active ? "pill pill-green" : "pill pill-grey"}
-                style={{ cursor: "pointer" }}
               >
-                {new Date(item.submittedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })} · {grade.percent}%
+                <span>{new Date(item.submittedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+                <b>{grade.percent}%</b>
               </button>
             );
           })}
         </div>
       ) : null}
 
+      <div className="quiz-top">
+        {taking ? (
+          <div>
+            <p>Đã trả lời {quiz.questions.length - unanswered}/{quiz.questions.length} câu</p>
+            <div className="meter quiz-meter" aria-hidden="true">
+              <span style={{ width: `${quiz.questions.length ? Math.round(((quiz.questions.length - unanswered) * 100) / quiz.questions.length) : 0}%` }} />
+            </div>
+            <p className="meta">Đáp án và giải thích hiển thị sau khi nộp.</p>
+          </div>
+        ) : result ? (
+          <div className="total" role="status">
+            <span className="score-pen big">{result.percent}%</span>
+            <div>
+              <h2>{result.correct}/{result.total} câu đúng</h2>
+              <p className="meta">Câu bỏ trống tính là sai. Làm lại không ghi đè kết quả này.</p>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <h2>{quiz.questions.length} câu trắc nghiệm</h2>
+            <p className="meta">Đáp án và giải thích hiển thị sau khi nộp.</p>
+          </div>
+        )}
+        {taking ? (
+          <Button variant="outline" disabled={submitting} onClick={() => { setTaking(false); onTakingChange?.(false); }}>Lưu và tạm dừng</Button>
+        ) : (
+          <Button onClick={start}>{draft ? "Tiếp tục bài đang làm" : attempt ? "Làm lại" : "Bắt đầu làm bài"}</Button>
+        )}
+      </div>
+
       {taking && draft ? (
         <>
-          <p className="meta" style={{ marginTop: 12 }}>Đã trả lời {quiz.questions.length - unanswered}/{quiz.questions.length} câu. Đáp án và giải thích hiển thị sau khi nộp.</p>
-          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 20 }}>
-            {quiz.questions.map((question, index) => (
-              <fieldset key={question.id} style={{ margin: 0, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
-                <legend style={{ padding: 0, margin: 0, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                  Câu {index + 1}
-                  {question.backendLastCorrect === false ? (
-                    <span className="pill" style={{ background: "var(--c-amber-soft, #fff3cd)", color: "var(--c-amber-ink, #92610a)", fontWeight: 500, fontSize: 12 }}>
-                      Mới trả lời sai — ôn lại ngay
-                    </span>
-                  ) : question.backendLastCorrect === true ? (
-                    <span className="pill" style={{ background: "var(--c-green-soft, #dcf5e1)", color: "var(--c-green-ink, #1a7a35)", fontWeight: 500, fontSize: 12 }}>
-                      Đã đúng — ôn lại cho nhớ lâu
-                    </span>
-                  ) : null}
-                </legend>
-                <p style={{ marginBottom: 16, whiteSpace: "pre-wrap" }}>{question.prompt}</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {question.options.map((option, optionIndex) => {
-                    const chosen = draft.answers[question.id] === optionIndex;
-                    return (
-                      <label key={optionIndex} className="option" style={{ cursor: "pointer", borderColor: chosen ? "var(--ink)" : "var(--border)" }}>
-                        <input
-                          type="radio"
-                          disabled={submitting}
-                          name={`${draft.id}-${question.id}`}
-                          checked={chosen}
-                          onChange={() => quizzes.store.answer(draft.id, question.id, optionIndex)}
-                          style={{ accentColor: "var(--accent)", marginTop: 4 }}
-                        />
-                        <span className="key">{String.fromCharCode(65 + optionIndex)}</span>
-                        <span className="grow">{option}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ))}
-          </div>
-          <Button style={{ marginTop: 24 }} disabled={submitting} onClick={() => { if (unanswered) setConfirmSubmit(true); else void submit(); }}>
+          {quiz.questions.map((question, index) => (
+            <fieldset key={question.id} className="q-card">
+              <legend className="q-head">
+                <span className="q-num">Câu {index + 1}</span>
+                {question.backendLastCorrect === false ? (
+                  <span className="pill pill-amber">Mới trả lời sai, ôn lại ngay</span>
+                ) : question.backendLastCorrect === true ? (
+                  <span className="pill pill-green">Đã đúng, ôn lại cho nhớ lâu</span>
+                ) : null}
+              </legend>
+              <p className="q-text">{question.prompt}</p>
+              {question.options.map((option, optionIndex) => {
+                const chosen = draft.answers[question.id] === optionIndex;
+                return (
+                  <label key={optionIndex} className={chosen ? "option chosen" : "option"}>
+                    <input
+                      type="radio"
+                      disabled={submitting}
+                      name={`${draft.id}-${question.id}`}
+                      checked={chosen}
+                      onChange={() => quizzes.store.answer(draft.id, question.id, optionIndex)}
+                      style={{ accentColor: "var(--accent)", marginTop: 6 }}
+                    />
+                    <span className="key">{String.fromCharCode(65 + optionIndex)}</span>
+                    <span className="grow">{option}</span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ))}
+          <Button size="lg" className="self-start" disabled={submitting} onClick={() => { if (unanswered) setConfirmSubmit(true); else void submit(); }}>
             {submitting ? "Đang nộp bài…" : "Nộp bài"}
           </Button>
         </>
@@ -247,10 +263,7 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
 
       {!taking && result ? (
         <>
-          <p role="status" style={{ marginTop: 16, fontSize: 24, fontWeight: 700, color: "var(--accent-strong)" }}>{result.correct}/{result.total} câu đúng · {result.percent}%</p>
-          <p className="meta" style={{ marginTop: 8 }}>Câu bỏ trống được tính là sai. Làm lại tạo một lần nộp mới, không ghi đè kết quả này.</p>
-
-          <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Button
               variant="outline"
               disabled={result.total === result.correct || creating}
@@ -258,37 +271,44 @@ export function QuizRunner({ quiz, quizzes, initialAttemptId, onSwitchQuiz, onTa
             >
               {creating ? "Đang tạo…" : `Làm lại câu sai (${result.total - result.correct})`}
             </Button>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={wrongOnly} onChange={(event) => setWrongOnly(event.target.checked)} style={{ accentColor: "var(--accent)" }} />
+            <label className="flex min-h-11 items-center gap-2">
+              <input type="checkbox" className="size-5" checked={wrongOnly} onChange={(event) => setWrongOnly(event.target.checked)} style={{ accentColor: "var(--accent)" }} />
               Chỉ xem câu sai ({result.total - result.correct})
             </label>
           </div>
           {wrongOnly && result.correct === result.total ? (
-            <p className="meta" style={{ marginTop: 16, color: "var(--accent-strong)" }}>Bạn đã trả lời đúng tất cả câu hỏi.</p>
+            <p className="ok">Bạn đã trả lời đúng tất cả câu hỏi.</p>
           ) : null}
-          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-            {result.items.map((item) => (!wrongOnly || !item.correct) ? (
-              <article key={item.question.id} style={{ border: `1px solid ${item.correct ? "var(--accent)" : "var(--error)"}`, background: item.correct ? "var(--accent-soft)" : "var(--error-soft)", borderRadius: "var(--radius-md)", padding: 16 }}>
-                <h3 style={{ margin: 0, lineHeight: 1.5 }}>{item.question.prompt}</h3>
-                <span
-                  className="pill"
-                  style={{ marginTop: 10, display: "inline-block", background: item.correct ? "var(--accent)" : "var(--error)", color: "#fff", fontWeight: 600 }}
-                >
-                  {item.correct ? "Đúng" : "Sai"}
-                </span>
-                <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.6 }}>
-                  Bạn chọn: {item.selected === undefined ? "Chưa trả lời" : item.question.options[item.selected]}
-                </p>
-                <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.6, color: "var(--accent-strong)" }}>Đáp án đúng: {item.question.options[item.question.correctIndex]}</p>
-                <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.6 }}>{item.question.explanation}</p>
-                {!item.correct && item.question.backendTopic && quiz.documentId ? (
-                  <Button variant="outline" size="sm" style={{ marginTop: 10 }} onClick={() => setReviewTopic(item.question.backendTopic ?? null)}>
-                    Xem lại kiến thức
-                  </Button>
-                ) : null}
-              </article>
-            ) : null)}
-          </div>
+          {result.items.map((item, index) => (!wrongOnly || !item.correct) ? (
+            <article key={item.question.id} className="q-card">
+              <div className="q-head">
+                <span className="q-num">Câu {index + 1}</span>
+                <span className={item.correct ? "pill pill-green" : "pill pill-red"}>{item.correct ? "Đúng" : "Sai"}</span>
+              </div>
+              <h3 className="q-text">{item.question.prompt}</h3>
+              <ul className="answers">
+                {item.question.options.map((option, optionIndex) => {
+                  const right = optionIndex === item.question.correctIndex;
+                  const picked = optionIndex === item.selected;
+                  return (
+                    <li key={optionIndex} className={right ? "answer right" : picked ? "answer wrong" : "answer"}>
+                      <span className="key">{String.fromCharCode(65 + optionIndex)}</span>
+                      <span className="grow">{option}</span>
+                      {right ? <span className="answer-note">{picked ? "Bạn chọn đúng" : "Đáp án đúng"}</span>
+                        : picked ? <span className="answer-note">Bạn chọn</span> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+              {item.selected === undefined ? <p className="err">Bạn chưa trả lời câu này.</p> : null}
+              {item.question.explanation ? <p className="quote">{item.question.explanation}</p> : null}
+              {!item.correct && item.question.backendTopic && quiz.documentId ? (
+                <Button variant="outline" size="sm" className="mt-1" onClick={() => setReviewTopic(item.question.backendTopic ?? null)}>
+                  Xem lại kiến thức
+                </Button>
+              ) : null}
+            </article>
+          ) : null)}
         </>
       ) : null}
 

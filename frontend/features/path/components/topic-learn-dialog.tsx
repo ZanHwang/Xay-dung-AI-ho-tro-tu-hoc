@@ -51,22 +51,24 @@ function ExcerptPage({ documentId, page }: { documentId: string; page: string })
     };
   }, [documentId, page]);
   if (!url) return null;
-  return <img src={url} alt={`Trang ${page}`} loading="lazy" className="mt-2 block w-full max-h-[640px] rounded-md border border-border object-contain" />;
+  return <img src={url} alt={`Trang ${page}`} loading="lazy" />;
 }
 
 function Excerpt({ excerpt, documentId }: { excerpt: TopicExcerpt; documentId: string }) {
   return (
-    <div className="list-row" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
-      <span className="grow">
-        <span className="title block">{excerpt.documentName}{excerpt.page ? ` · Trang ${excerpt.page}` : ""}</span>
-        {/* excerpt.content (raw OCR'd text, used internally as the AI's own
-            context) is deliberately NOT shown here - with the real slide
-            image below, it only ever duplicated the same page, badly (OCR
-            garbles math/formulas), never adding anything a person could read
-            better than the image itself. */}
-        {excerpt.page ? <ExcerptPage documentId={documentId} page={excerpt.page} /> : null}
-      </span>
-    </div>
+    <figure className="pasted">
+      <i className="tape t2" aria-hidden="true" />
+      <figcaption>
+        {excerpt.documentName}
+        {excerpt.page ? <>, <span className="mark-hl">trang {excerpt.page}</span></> : null}
+      </figcaption>
+      {/* excerpt.content (raw OCR'd text, used internally as the AI's own
+          context) is deliberately NOT shown here - with the real slide
+          image below, it only ever duplicated the same page, badly (OCR
+          garbles math/formulas), never adding anything a person could read
+          better than the image itself. */}
+      {excerpt.page ? <ExcerptPage documentId={documentId} page={excerpt.page} /> : null}
+    </figure>
   );
 }
 
@@ -184,75 +186,78 @@ export function TopicLearnDialog({
   const displayExcerpts = lesson ? orderExcerptsForDisplay(lesson.excerpts) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-card">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <span className="grid size-8 place-items-center rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
-          <BookOpen className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{topic}</p>
-          <p className="truncate text-xs text-muted-foreground">
+    <div className="overlay">
+      <div className="overlay-bar">
+        <span className="file-ic" aria-hidden="true"><BookOpen className="size-5" /></span>
+        <div>
+          <h2>{topic}</h2>
+          <p>
             {mode === "full" ? "Xem lại kiến thức trước khi luyện tập." : "Kiến thức liên quan tới câu bạn vừa làm sai."}
           </p>
         </div>
-        <Button variant="outline" size="icon" className="ml-auto size-8" onClick={onClose} aria-label="Đóng (Esc)">
-          <X className="size-4" />
-        </Button>
+        <button type="button" className="more" onClick={onClose} aria-label="Đóng (Esc)">
+          <X className="size-5" />
+        </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto" style={{ padding: 24 }}>
-        {error ? <div role="alert" className="error-box"><p>{error}</p></div> : null}
+      <div className="overlay-body">
+        <div className="sheet">
+          {error ? <div role="alert" className="error-box"><p>{error}</p></div> : null}
 
-        {loading ? (
-          <p className="meta" style={{ marginTop: 12 }}>Đang tải…</p>
-        ) : lesson ? (
-          <div className="space-y-4 py-2">
-            <MarkdownContent>{lesson.summary}</MarkdownContent>
-
-            {displayExcerpts.length > 0 ? (
-              <div>
-                <p className="label" style={{ marginBottom: 8 }}>Trích đoạn gốc trong tài liệu</p>
-                <div className="scroll-list">
-                  {displayExcerpts.map((excerpt, index) => (
-                    <Excerpt key={index} excerpt={excerpt} documentId={documentId as string} />
-                  ))}
-                </div>
+          {loading ? (
+            <p className="meta" role="status">Đang tải…</p>
+          ) : lesson ? (
+            <>
+              <div className="lesson">
+                <MarkdownContent>{lesson.summary}</MarkdownContent>
               </div>
-            ) : null}
 
-            {mode === "full" ? (
-              <div>
-                <p className="label" style={{ marginBottom: 8 }}>Hỏi thêm AI về chủ đề này</p>
-                {chat.length > 0 ? (
-                  <div className="scroll-list" style={{ marginBottom: 8 }}>
-                    {chat.map((m, i) => (
-                      <p key={i} className="meta" style={{ padding: "6px 0", fontWeight: m.role === "user" ? 600 : 400 }}>
-                        {m.role === "user" ? "Bạn: " : "AI: "}{m.content}
-                      </p>
+              {displayExcerpts.length > 0 ? (
+                <section>
+                  <h3 className="block-title">Trích đoạn gốc trong tài liệu</h3>
+                  <div className="excerpts">
+                    {displayExcerpts.map((excerpt, index) => (
+                      <Excerpt key={index} excerpt={excerpt} documentId={documentId as string} />
                     ))}
                   </div>
-                ) : null}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Nhập câu hỏi…"
-                    value={question}
-                    disabled={asking}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAsk(); } }}
-                  />
-                  <Button variant="outline" size="icon" disabled={asking || !question.trim()} onClick={() => void handleAsk()} aria-label="Gửi câu hỏi">
-                    <Send className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+                </section>
+              ) : null}
+
+              {mode === "full" ? (
+                <section>
+                  <h3 className="block-title" style={{ marginBottom: 10 }}>Hỏi thêm AI về chủ đề này</h3>
+                  {chat.length > 0 ? (
+                    <div className="scroll-list qa">
+                      {chat.map((m, i) => m.role === "user" ? (
+                        <div key={i} className="bubble bubble-user">{m.content}</div>
+                      ) : (
+                        <div key={i} className="bubble bubble-bot"><MarkdownContent>{m.content}</MarkdownContent></div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {asking ? <p className="meta" role="status" style={{ marginBottom: 8 }}>TuHoc đang suy nghĩ…</p> : null}
+                  <div className="ask-box">
+                    <input
+                      type="text"
+                      aria-label="Câu hỏi về chủ đề"
+                      placeholder="Nhập câu hỏi…"
+                      value={question}
+                      disabled={asking}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void handleAsk(); } }}
+                    />
+                    <Button size="icon" className="size-11 shrink-0 rounded-lg" disabled={asking || !question.trim()} onClick={() => void handleAsk()} aria-label="Gửi câu hỏi">
+                      <Send className="size-4" />
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-2.5">
+      <div className="overlay-foot">
         <Button variant="ghost" onClick={onClose}>Đóng</Button>
         {mode === "full" ? (
           <Button onClick={() => void handleStartPractice()} disabled={starting || loading}>
