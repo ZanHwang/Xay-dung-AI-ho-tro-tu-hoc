@@ -11,7 +11,7 @@ _test_dir = tempfile.TemporaryDirectory(prefix="tuhoc-tests-")
 os.environ["DATABASE_URL"] = "sqlite:///" + (Path(_test_dir.name) / "startup.db").as_posix()
 os.environ["SECRET_KEY"] = "isolated-tests-only"
 os.environ["QDRANT_URL"] = "http://127.0.0.1:6333"
-for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_EMBEDDING_API_KEY", "QDRANT_API_KEY"):
+for key in ("OPENAI_API_KEY", "GEMINI_EMBEDDING_API_KEY", "QDRANT_API_KEY"):
     os.environ[key] = ""
 
 
@@ -45,12 +45,11 @@ def isolated_storage(tmp_path):
 @pytest.fixture(autouse=True)
 def no_external_ai(monkeypatch):
     """Tests must never fall through to a real AI call - mock explicitly."""
-    from app.ai.llm import OpenAIProvider, AnthropicProvider
+    from app.ai.llm import OpenAIProvider
     from app.ai.embedding import EmbeddingProvider
 
     async def blocked(*args, **kwargs):
         raise AssertionError("Tests must mock AI calls")
 
     monkeypatch.setattr(OpenAIProvider, "generate", blocked)
-    monkeypatch.setattr(AnthropicProvider, "generate", blocked)
     monkeypatch.setattr(EmbeddingProvider, "embed", blocked)

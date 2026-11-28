@@ -77,55 +77,6 @@ class OpenAIProvider(LLMProvider):
         )
 
 
-class AnthropicProvider(LLMProvider):
-    """Anthropic Claude provider."""
-
-    def __init__(self):
-        self.api_key = settings.anthropic_api_key
-        self.model = settings.anthropic_model
-        self.api_url = "https://api.anthropic.com/v1/messages"
-
-    async def generate(self, prompt: str, **kwargs) -> str:
-        """Generate response using Anthropic API."""
-        if not self.api_key:
-            return self._mock_response(prompt)
-
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 4000)
-        }
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.api_url,
-                    headers=headers,
-                    json=data,
-                    timeout=60.0
-                )
-                response.raise_for_status()
-                result = response.json()
-                return result["content"][0]["text"]
-            except httpx.HTTPError:
-                return self._mock_response(prompt)
-
-    def _mock_response(self, prompt: str) -> str:
-        """Mock response when API key is not set."""
-        return (
-            "[Placeholder] Đây là câu trả lời mẫu.\n\n"
-            f"Câu hỏi của bạn: {prompt[:100]}...\n\n"
-            "Vui lòng cấu hình API key để sử dụng AI thực sự."
-        )
-
-
 class LLMManager:
     """Manager for LLM providers."""
 
@@ -135,12 +86,7 @@ class LLMManager:
     @property
     def provider(self) -> LLMProvider:
         if self._provider is None:
-            if settings.llm_provider == "openai":
-                self._provider = OpenAIProvider()
-            elif settings.llm_provider == "anthropic":
-                self._provider = AnthropicProvider()
-            else:
-                self._provider = OpenAIProvider()  # Default
+            self._provider = OpenAIProvider()
         return self._provider
 
     async def generate(

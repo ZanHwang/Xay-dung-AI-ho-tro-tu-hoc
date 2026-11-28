@@ -16,14 +16,14 @@ AI Gia Sư Hỗ Trợ Học Tập Tiếng Việt - Backend API
 - **Framework:** FastAPI (Python)
 - **Database:** PostgreSQL (dùng Neon) + SQLAlchemy
 - **Vector DB:** Qdrant
-- **AI:** OpenAI / Anthropic LLM, RAG Pipeline
+- **AI:** OpenAI LLM + Gemini embedding, RAG Pipeline
 
 ## Yêu cầu hệ thống
 
 - Python 3.12 được khuyến nghị cho các phiên bản thư viện đang dùng.
 - PostgreSQL (có thể dùng Neon cloud, không cần cài local)
 - Qdrant (cloud hoặc chạy local qua Docker)
-- API key OpenAI và/hoặc Anthropic
+- API key OpenAI và Google Gemini
 
 ## Cài đặt
 

@@ -31,10 +31,6 @@ services:
         sync: false
       - key: OPENAI_MODEL
         sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_MODEL
-        sync: false
       - key: ALGORITHM
         sync: false
       - key: ACCESS_TOKEN_EXPIRE_MINUTES

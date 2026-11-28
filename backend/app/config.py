@@ -37,8 +37,6 @@ class Settings(BaseSettings):
     # figure inspection). Must support images - gpt-4o-mini does, and it is
     # the cheapest vision-capable model in the GPT-4o family.
     vision_model: str = "gpt-4o-mini"
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-sonnet-20240229"
 
     # Conversation memory: how many recent messages are fed to the LLM as
     # context on each call. Tune via ASK_MEMORY_MESSAGES in .env.
